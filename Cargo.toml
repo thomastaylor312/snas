@@ -1,0 +1,22 @@
+[package]
+name = "snas"
+description = "Simple NATS Auth Service - A simple, distributed, and highly available directory service for authentication and authorization."
+version = "0.1.0"
+edition = "2021"
+authors = ["Taylor Thomas <taylor@oftaylor.com>"]
+
+[dependencies]
+anyhow = "1"
+argon2 = "0.5"
+async-nats = "0.33"
+bincode = "2.0.0-rc.3"
+clap = { version = "4", features = ["derive", "env"] }
+# 0.3.30 has a weird missing crate issue
+futures = "=0.3.29"
+rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "ansi"] }
