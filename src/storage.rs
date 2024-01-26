@@ -84,16 +84,59 @@ impl CredStore {
         })
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub async fn get_user(&self, username: &str) -> Option<UserInfo> {
         self.cache.read().await.get(username).cloned()
     }
 
+    #[instrument(level = "trace", skip(self, info))]
     pub async fn put_user(&self, username: String, info: UserInfo) -> anyhow::Result<()> {
-        todo!("Make sure and update cache after successful put")
+        // Serialize first so we can bail early if there is an error
+        let value = bincode::encode_to_vec(&info, bincode::config::standard())
+            .context("Unable to encode data")?;
+        // To be absolutely safe, fetch the current entry so we can grab its revision number so we
+        // don't collide on an update
+        trace!("Fetching current revision");
+        let revision = self
+            .store
+            .entry(&username)
+            .await
+            .context("Unable to fetch current revision")?
+            .map(|entry| entry.revision)
+            .unwrap_or(0);
+        trace!("Sending data to store");
+        self.store
+            .update(&username, value.into(), revision)
+            .await
+            .context("Unable to update store")?;
+
+        trace!("Updating data in cache after successful store operation");
+        {
+            let mut lock = self.cache.write().await;
+            if lock.insert(username, info).is_some() {
+                trace!("Entry was already in cache, updating");
+            } else {
+                trace!("Entry was not in cache, inserting");
+            }
+        }
+
+        Ok(())
     }
 
+    #[instrument(level = "trace", skip(self))]
     pub async fn delete_user(&self, username: &str) -> anyhow::Result<()> {
-        todo!()
+        trace!("Purging user from store");
+        self.store
+            .purge(username)
+            .await
+            .context("Unable to delete user from store")?;
+        trace!("Purging user from cache after successful store operation");
+        if self.cache.write().await.remove(username).is_some() {
+            trace!("User was in cache, removing");
+        } else {
+            trace!("User was not in cache");
+        }
+        Ok(())
     }
 }
 

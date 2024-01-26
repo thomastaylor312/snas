@@ -26,7 +26,7 @@ pub struct ValidationRequest {
 
 /// A string wrapper type that will not leak credentials in logs or printing while still able to be
 /// used as a string. Will zero out the memory when dropped.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SecureString(String);
 
 impl Drop for SecureString {
@@ -104,6 +104,12 @@ impl From<String> for SecureString {
     }
 }
 
+impl From<&str> for SecureString {
+    fn from(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+}
+
 impl AsRef<str> for SecureString {
     fn as_ref(&self) -> &str {
         self.0.as_str()
@@ -118,7 +124,7 @@ impl AsRef<String> for SecureString {
 
 /// A vec of bytes wrapper that will not leak credentials in logs or printing while still able to be
 /// used as a Vec<u8>. Will zero out the memory when dropped.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SecureBytes(Vec<u8>);
 
 impl Drop for SecureBytes {
@@ -190,6 +196,12 @@ impl<'de> Deserialize<'de> for SecureBytes {
 impl From<Vec<u8>> for SecureBytes {
     fn from(s: Vec<u8>) -> Self {
         Self(s)
+    }
+}
+
+impl From<&[u8]> for SecureBytes {
+    fn from(s: &[u8]) -> Self {
+        Self(s.to_vec())
     }
 }
 

@@ -3,12 +3,7 @@ use std::io::IsTerminal;
 use async_nats::jetstream::{kv::Config, stream::StorageType};
 use clap::Parser;
 
-use crate::storage::CredStore;
-
-mod handlers;
-mod servers;
-mod storage;
-pub mod types;
+use snas::storage::CredStore;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
