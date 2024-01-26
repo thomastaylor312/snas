@@ -72,6 +72,14 @@ struct Args {
         conflicts_with = "nats_only"
     )]
     socket_only: bool,
+
+    /// The default groups to give to new users, given as a comma delimited list
+    #[arg(
+        long = "default-groups",
+        use_value_delimiter = true,
+        env = "SNAS_DEFAULT_GROUPS"
+    )]
+    default_groups: Option<Vec<String>>,
 }
 
 #[tokio::main]

@@ -3,27 +3,6 @@ use std::fmt::{Debug, Display};
 use bincode::{BorrowDecode, Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-/// Information necessary to verify a user's credentials and identify their groups
-#[derive(Serialize, Deserialize, Debug, Clone, Encode, Decode)]
-pub struct UserInfo {
-    pub hashed_password: SecureString,
-    pub groups: Vec<String>,
-}
-
-/// A validation response for a credential challenge
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ValidationResponse {
-    pub valid: bool,
-    pub groups: Vec<String>,
-}
-
-/// A validation request for a credential challenge
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ValidationRequest {
-    pub username: String,
-    pub password: SecureString,
-}
-
 /// A string wrapper type that will not leak credentials in logs or printing while still able to be
 /// used as a string. Will zero out the memory when dropped.
 #[derive(Clone, PartialEq, Eq)]
