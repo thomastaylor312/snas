@@ -16,6 +16,7 @@ async fn test_crud() {
     let mut foo_user = UserInfo {
         hashed_password: "bar".into(),
         password_reset: None,
+        needs_approval: false,
         groups: vec!["foo".into()],
     };
 
@@ -71,11 +72,13 @@ async fn test_initialization() {
     let foo_user = UserInfo {
         hashed_password: "bar".into(),
         password_reset: None,
+        needs_approval: false,
         groups: vec!["foo".into()],
     };
     let bar_user = UserInfo {
         hashed_password: "baz".into(),
         password_reset: None,
+        needs_approval: false,
         groups: vec!["foo".into()],
     };
     // Insert some data
@@ -131,6 +134,7 @@ async fn test_sync() {
     let mut foo_user = UserInfo {
         hashed_password: "bar".into(),
         password_reset: None,
+        needs_approval: false,
         groups: vec!["foo".into()],
     };
     main_store

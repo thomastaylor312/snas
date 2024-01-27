@@ -13,6 +13,7 @@ pub use secure::*;
 pub struct UserInfo {
     pub hashed_password: SecureString,
     pub password_reset: Option<PasswordResetPhase>,
+    pub needs_approval: bool,
     pub groups: Vec<String>,
 }
 

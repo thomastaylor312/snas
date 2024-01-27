@@ -5,7 +5,7 @@ use crate::types::SecureString;
 /// A generic response reused for many different requests
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GenericResponse {
-    pub status: bool,
+    pub success: bool,
     pub message: String,
 }
 
