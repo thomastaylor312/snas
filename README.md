@@ -14,7 +14,7 @@ this for two main reasons (beyond having fun writing it):
    clustered and HA, as well as being globally available if done right. Although I just plan to run
    a few NATS servers locally for this, it can easily be used in multiple areas or other homelabs
    via tools like [Tailscale](https://tailscale.com/) or [Synadia
-   Cloud](https://www.synadia.com/cloud)(née NGS). This can even enable you to spread out replicas
+   Cloud](https://www.synadia.com/cloud) (née NGS). This can even enable you to spread out replicas
    of the data to anywhere you want.
 
 ## Is this ready to use?

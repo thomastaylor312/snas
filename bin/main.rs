@@ -1,4 +1,4 @@
-use std::io::IsTerminal;
+use std::{io::IsTerminal, path::PathBuf};
 
 use async_nats::jetstream::{kv::Config, stream::StorageType};
 use clap::Parser;
@@ -55,23 +55,55 @@ struct Args {
     #[arg(short = 'j', long = "json", env = "SNAS_LOG_FORMAT")]
     json_logs: bool,
 
-    /// Only start the NATS API, don't start the socket. Mutually exclusive with --socket-only
+    /// Listen on the admin NATS API topics. By default this is off as listening to this on a host
+    /// with a leaf node could allow anonymous access to the admin API
     #[arg(
-        id = "nats_only",
-        long = "nats-only",
-        env = "SNAS_NATS_ONLY",
-        conflicts_with = "socket_only"
+        id = "admin_nats",
+        long = "admin-nats",
+        env = "SNAS_ADMIN_NATS",
+        default_value_t = false
     )]
-    nats_only: bool,
+    admin_nats: bool,
 
-    /// Only start the socket, don't start the NATS API. Mutually exclusive with --nats-only
+    /// Listen on the user NATS API topics. By default this is off as listening to this on a host
+    /// with a leaf node could allow anonymous access to the user API
     #[arg(
-        id = "socket_only",
-        long = "socket-only",
-        env = "SNAS_SOCKET_ONLY",
-        conflicts_with = "nats_only"
+        id = "user_nats",
+        long = "user-nats",
+        env = "SNAS_USER_NATS",
+        default_value_t = false
     )]
-    socket_only: bool,
+    user_nats: bool,
+
+    /// The path to the socket file to use for the user API. This should exist in a directory that
+    /// is only accessible to root or other super admins so as to not be abused
+    // TODO(thomastaylor312): This default won't work on Windows, so we will need to figure out a
+    // sensible default and set it via cfg_attr
+    #[arg(
+        id = "socket_file",
+        long = "socket-file",
+        env = "SNAS_SOCKET_FILE",
+        required_unless_present_any = ["admin_socket_file", "admin_nats", "user_nats"],
+    )]
+    socket_file: PathBuf,
+
+    /// The path to the socket file to use for the admin API. This should exist in a directory that
+    /// is only accessible to root or other super admins so as to not be abused
+    #[arg(
+        id = "admin_socket_file",
+        long = "admin-socket-file",
+        env = "SNAS_ADMIN_SOCKET_FILE"
+    )]
+    admin_socket_file: Option<PathBuf>,
+
+    /// The default user to create if one does not already exist. This user will be created with
+    /// the password specified by the `--password` flag
+    #[arg(
+        long = "default-user",
+        default_value = "snas",
+        env = "SNAS_DEFAULT_USER"
+    )]
+    default_user: String,
 
     /// The default groups to give to new users, given as a comma delimited list
     #[arg(
