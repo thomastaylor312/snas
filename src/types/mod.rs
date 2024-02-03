@@ -7,6 +7,7 @@ pub mod api;
 mod secure;
 
 pub use secure::*;
+use serde::{Deserialize, Serialize};
 
 /// Information necessary to verify a user's credentials and identify their groups
 #[derive(Debug, Clone, Encode, Decode)]
@@ -18,7 +19,7 @@ pub struct UserInfo {
 }
 
 /// The current state of a user's password reset process
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, Serialize, Deserialize)]
 pub enum PasswordResetPhase {
     /// The user's password has been reset, but they still need to log in to change it. Will expire
     /// at the given duration (as measured in seconds since the unix epoch)

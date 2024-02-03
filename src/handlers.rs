@@ -35,7 +35,7 @@ impl Handlers {
 
     /// Add the given user with the given password. Groups outside of the default groups must be
     /// added separately as that is an admin operation. The `needs_approval` param indicates whether
-    /// the user needs to be approved before they can log in generally if it wasn't created as an
+    /// the user needs to be approved before they can log in – generally if it wasn't created as an
     /// admin.
     pub async fn add(
         &self,

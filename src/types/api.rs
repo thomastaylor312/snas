@@ -4,10 +4,30 @@ use crate::types::SecureString;
 
 /// A generic response reused for many different requests
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GenericResponse {
+pub struct GenericResponse<T: 'static> {
+    /// Whether the request succeeded
     pub success: bool,
+    /// A message with additional context about the response
     pub message: String,
+    /// The response data, if any
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response: Option<T>,
 }
+
+impl GenericResponse<EmptyResponse> {
+    /// Create a new response with no response data
+    pub fn new(success: bool, message: String) -> Self {
+        Self {
+            success,
+            message,
+            response: None,
+        }
+    }
+}
+
+/// An empty type used when returning a response with no data
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct EmptyResponse;
 
 /// A verification request for a credential challenge
 #[derive(Serialize, Deserialize, Debug, Clone)]
