@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    api::VerificationResponse,
-    error::{HandleError, Result},
-    storage::CredStore,
-    SecureString,
+    admin::UserResponse, api::VerificationResponse, error::Result, storage::CredStore, SecureString,
 };
 
 #[derive(Clone)]
@@ -42,6 +39,7 @@ impl Handlers {
         username: &str,
         password: SecureString,
         needs_approval: bool,
+        needs_password_reset: bool,
     ) -> Result<()> {
         todo!()
     }
@@ -53,6 +51,11 @@ impl Handlers {
         current_password: SecureString,
         new_password: SecureString,
     ) -> Result<()> {
+        todo!()
+    }
+
+    /// Set the approval flag on a user
+    pub async fn set_approval(&self, username: &str, approved: bool) -> Result<()> {
         todo!()
     }
 
@@ -83,6 +86,16 @@ impl Handlers {
 
     /// Delete the given user
     pub async fn delete(&self, username: &str) -> Result<()> {
+        todo!()
+    }
+
+    /// Get information for the given user. Returns None if the user doesn't exist.
+    pub async fn get(&self, username: &str) -> Result<Option<UserResponse>> {
+        todo!()
+    }
+
+    /// Get all usernames
+    pub async fn list(&self) -> Result<Vec<String>> {
         todo!()
     }
 }

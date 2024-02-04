@@ -1,4 +1,4 @@
-use async_nats::{Client, Subscriber};
+use async_nats::{Client, Message, Subscriber};
 use futures::StreamExt;
 use tracing::{instrument, trace, warn};
 
@@ -62,7 +62,7 @@ impl NatsUserServer {
     }
 
     #[instrument(level = "debug", skip_all, fields(subject = %msg.subject))]
-    async fn handle_verify(&self, msg: async_nats::Message) {
+    async fn handle_verify(&self, msg: Message) {
         let req =
             deserialize_body::<VerificationRequest>(&self.client, &msg.payload, msg.reply.as_ref())
                 .await;
@@ -96,7 +96,7 @@ impl NatsUserServer {
     }
 
     #[instrument(level = "debug", skip_all, fields(subject = %msg.subject))]
-    async fn handle_change_password(&self, msg: async_nats::Message) {
+    async fn handle_change_password(&self, msg: Message) {
         let req = deserialize_body::<PasswordChangeRequest>(
             &self.client,
             &msg.payload,

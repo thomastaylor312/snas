@@ -2,8 +2,14 @@ use std::{io::IsTerminal, path::PathBuf};
 
 use async_nats::jetstream::{kv::Config, stream::StorageType};
 use clap::Parser;
+use futures::future::{pending, Either};
+use tracing::error;
 
-use snas::storage::CredStore;
+use snas::{
+    handlers::Handlers,
+    servers::nats::{admin::NatsAdminServer, user::NatsUserServer},
+    storage::CredStore,
+};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -154,5 +160,32 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Successfully connected to bucket");
     let store = CredStore::new(bucket).await?;
 
+    // TODO: Allow setting of default groups
+    let handlers = Handlers::new(store, vec!["TODO".to_string()]);
+
+    let nats_user_server = if args.user_nats {
+        Either::Left(
+            NatsUserServer::new(handlers.clone(), client.clone())
+                .await?
+                .run(),
+        )
+    } else {
+        Either::Right(pending::<anyhow::Result<()>>())
+    };
+
+    let nats_admin_server = if args.admin_nats {
+        Either::Left(
+            NatsAdminServer::new(handlers.clone(), client.clone())
+                .await?
+                .run(),
+        )
+    } else {
+        Either::Right(pending::<anyhow::Result<()>>())
+    };
+
+    if let Err(err) = futures::try_join!(nats_user_server, nats_admin_server,) {
+        error!(%err, "An error occurred, shutting down");
+        return Err(err);
+    }
     Ok(())
 }

@@ -1,8 +1,8 @@
-use async_nats::{Client, Subscriber};
+use async_nats::{Client, Message, Subscriber};
 use futures::StreamExt;
 use tracing::{instrument, trace, warn};
 
-use crate::{handlers::Handlers, ADMIN_NATS_QUEUE, ADMIN_NATS_SUBJECT};
+use crate::{admin::AdminUserAddRequest, handlers::Handlers, ADMIN_NATS_QUEUE, ADMIN_NATS_SUBJECT};
 
 use super::*;
 
@@ -37,7 +37,7 @@ impl NatsAdminServer {
             }
             match split[2] {
                 "add_user" => {
-                    //todo
+                    self.handle_add_user(msg).await;
                 }
                 "approve_user" => {
                     // todo
@@ -72,5 +72,39 @@ impl NatsAdminServer {
             }
         }
         Err(anyhow::anyhow!("nats admin server exited"))
+    }
+
+    async fn handle_add_user(&self, msg: Message) {
+        let req =
+            deserialize_body::<AdminUserAddRequest>(&self.client, &msg.payload, msg.reply.as_ref())
+                .await;
+        if req.is_err() {
+            // deserialize_body sends the error back for us so we can just return
+            return;
+        }
+        let req = req.unwrap();
+
+        match self
+            .handlers
+            .add(
+                &req.username,
+                req.password,
+                false,
+                req.force_password_change,
+            )
+            .await
+        {
+            Ok(_) => {
+                send_response(
+                    &self.client,
+                    msg.reply,
+                    GenericResponse::new(true, format!("User {} added", req.username)),
+                )
+                .await;
+            }
+            Err(e) => {
+                send_error(&self.client, msg.reply, format!("Unable to add user: {e}")).await;
+            }
+        }
     }
 }

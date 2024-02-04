@@ -1,5 +1,4 @@
-mod nats;
+pub mod nats;
 mod socket;
 
-pub use nats::*;
 pub use socket::*;
