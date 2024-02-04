@@ -8,6 +8,9 @@ pub enum HandleError {
     /// An invalid password was given
     #[error("Invalid username or password")]
     InvalidCredentials,
+    /// The username sent for the requested operation does not exist
+    #[error("Username does not exist")]
+    UsernameDoesNotExist,
     /// Errors that occur when interacting with storage or other parts of the system
     #[error(transparent)]
     SystemError(#[from] anyhow::Error),

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::BTreeSet, time::Duration};
 
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +10,7 @@ use crate::{types::SecureString, PasswordResetPhase};
 pub struct AdminUserAddRequest {
     pub username: String,
     pub password: SecureString,
-    pub groups: Vec<String>,
+    pub groups: BTreeSet<String>,
     pub force_password_change: bool,
 }
 
@@ -37,29 +37,16 @@ pub struct UserDeleteRequest {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserResponse {
     pub username: String,
-    pub groups: Vec<String>,
+    pub groups: BTreeSet<String>,
     pub approved: bool,
     pub password_change_phase: Option<PasswordResetPhase>,
 }
 
 /// A request to add groups to a user
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GroupAddRequest {
+pub struct GroupModifyRequest {
     pub username: String,
-    pub groups: Vec<String>,
-}
-
-/// A request to delete groups from a user
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GroupDeleteRequest {
-    pub username: String,
-    pub groups: Vec<String>,
-}
-
-/// Response returned from group modification
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct GroupResponse {
-    pub groups: Vec<String>,
+    pub groups: BTreeSet<String>,
 }
 
 /// A request to reset a user's password

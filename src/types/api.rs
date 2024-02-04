@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::types::SecureString;
@@ -42,7 +44,7 @@ pub struct VerificationResponse {
     pub verified: bool,
     pub message: String,
     pub needs_password_reset: bool,
-    pub groups: Vec<String>,
+    pub groups: BTreeSet<String>,
 }
 
 /// A request to change a user's password

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, time::Duration};
+use std::{collections::BTreeSet, fmt::Debug, time::Duration};
 
 use bincode::{Decode, Encode};
 
@@ -15,7 +15,7 @@ pub struct UserInfo {
     pub hashed_password: SecureString,
     pub password_reset: Option<PasswordResetPhase>,
     pub needs_approval: bool,
-    pub groups: Vec<String>,
+    pub groups: BTreeSet<String>,
 }
 
 /// The current state of a user's password reset process

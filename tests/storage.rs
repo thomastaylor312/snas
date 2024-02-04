@@ -17,7 +17,7 @@ async fn test_crud() {
         hashed_password: "bar".into(),
         password_reset: None,
         needs_approval: false,
-        groups: vec!["foo".into()],
+        groups: ["foo".into()].into(),
     };
 
     store
@@ -35,7 +35,7 @@ async fn test_crud() {
     );
     assert_eq!(user.groups, foo_user.groups, "Users should be equal");
 
-    foo_user.groups.push("bar".into());
+    foo_user.groups.insert("bar".into());
 
     store
         .put_user("foo".into(), foo_user.clone())
@@ -73,13 +73,13 @@ async fn test_initialization() {
         hashed_password: "bar".into(),
         password_reset: None,
         needs_approval: false,
-        groups: vec!["foo".into()],
+        groups: ["foo".into()].into(),
     };
     let bar_user = UserInfo {
         hashed_password: "baz".into(),
         password_reset: None,
         needs_approval: false,
-        groups: vec!["foo".into()],
+        groups: ["foo".into()].into(),
     };
     // Insert some data
     store
@@ -135,7 +135,7 @@ async fn test_sync() {
         hashed_password: "bar".into(),
         password_reset: None,
         needs_approval: false,
-        groups: vec!["foo".into()],
+        groups: ["foo".into()].into(),
     };
     main_store
         .put_user("foo".into(), foo_user.clone())
@@ -155,7 +155,7 @@ async fn test_sync() {
     assert_eq!(user.groups, foo_user.groups, "Users should be equal");
 
     // Update some data in the main store, sleep, then see that it was reflected in the reflected store
-    foo_user.groups.push("bar".into());
+    foo_user.groups.insert("bar".into());
     main_store
         .put_user("foo".into(), foo_user.clone())
         .await

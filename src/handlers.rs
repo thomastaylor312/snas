@@ -1,18 +1,22 @@
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-    admin::UserResponse, api::VerificationResponse, error::Result, storage::CredStore, SecureString,
+    admin::{AdminUserAddRequest, PasswordResetResponse, UserResponse},
+    api::VerificationResponse,
+    error::Result,
+    storage::CredStore,
+    SecureString,
 };
 
 #[derive(Clone)]
 pub struct Handlers {
     store: Arc<CredStore>,
-    default_groups: Vec<String>,
+    default_groups: BTreeSet<String>,
 }
 
 impl Handlers {
     /// Configures the handlers with the given store and default groups.
-    pub fn new(store: CredStore, default_groups: impl Into<Vec<String>>) -> Handlers {
+    pub fn new(store: CredStore, default_groups: impl Into<BTreeSet<String>>) -> Handlers {
         Handlers {
             store: Arc::new(store),
             default_groups: default_groups.into(),
@@ -30,17 +34,8 @@ impl Handlers {
         todo!()
     }
 
-    /// Add the given user with the given password. Groups outside of the default groups must be
-    /// added separately as that is an admin operation. The `needs_approval` param indicates whether
-    /// the user needs to be approved before they can log in – generally if it wasn't created as an
-    /// admin.
-    pub async fn add(
-        &self,
-        username: &str,
-        password: SecureString,
-        needs_approval: bool,
-        needs_password_reset: bool,
-    ) -> Result<()> {
+    /// Add the given user to the system. This is meant to be used by admins only
+    pub async fn add(&self, req: AdminUserAddRequest) -> Result<()> {
         todo!()
     }
 
@@ -60,7 +55,7 @@ impl Handlers {
     }
 
     /// Reset the password for the given user. Returns temporary token for use as a password
-    pub async fn reset_password(&self, username: &str) -> Result<SecureString> {
+    pub async fn reset_password(&self, username: &str) -> Result<PasswordResetResponse> {
         todo!()
     }
 
@@ -68,9 +63,8 @@ impl Handlers {
     pub async fn add_groups(
         &self,
         username: &str,
-        password: SecureString,
-        groups: Vec<String>,
-    ) -> Result<Vec<String>> {
+        groups: BTreeSet<String>,
+    ) -> Result<BTreeSet<String>> {
         todo!()
     }
 
@@ -78,19 +72,18 @@ impl Handlers {
     pub async fn delete_groups(
         &self,
         username: &str,
-        password: SecureString,
-        groups: Vec<String>,
-    ) -> Result<Vec<String>> {
+        groups: BTreeSet<String>,
+    ) -> Result<BTreeSet<String>> {
         todo!()
     }
 
-    /// Delete the given user
+    /// Delete the given user, returning None if the user didn't exist
     pub async fn delete(&self, username: &str) -> Result<()> {
         todo!()
     }
 
     /// Get information for the given user. Returns None if the user doesn't exist.
-    pub async fn get(&self, username: &str) -> Result<Option<UserResponse>> {
+    pub async fn get(&self, username: &str) -> Result<UserResponse> {
         todo!()
     }
 

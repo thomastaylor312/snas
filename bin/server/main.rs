@@ -161,7 +161,7 @@ async fn main() -> anyhow::Result<()> {
     let store = CredStore::new(bucket).await?;
 
     // TODO: Allow setting of default groups
-    let handlers = Handlers::new(store, vec!["TODO".to_string()]);
+    let handlers = Handlers::new(store, ["TODO".to_string()]);
 
     let nats_user_server = if args.user_nats {
         Either::Left(
