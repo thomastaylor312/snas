@@ -84,6 +84,21 @@ impl CredStore {
         })
     }
 
+    /// Checks if the username exists. This will always check the cache first and then the store to
+    /// ensure that operations such as creating a new user are atomic.
+    #[instrument(level = "trace", skip(self))]
+    pub async fn exists(&self, username: &str) -> anyhow::Result<bool> {
+        if self.cache.read().await.contains_key(username) {
+            return Ok(true);
+        }
+
+        self.store
+            .get(username)
+            .await
+            .map(|val| val.is_some())
+            .map_err(anyhow::Error::from)
+    }
+
     #[instrument(level = "trace", skip(self))]
     pub async fn get_user(&self, username: &str) -> Option<UserInfo> {
         self.cache.read().await.get(username).cloned()
@@ -137,6 +152,11 @@ impl CredStore {
             trace!("User was not in cache");
         }
         Ok(())
+    }
+
+    #[instrument(level = "trace", skip(self))]
+    pub async fn list_users(&self) -> anyhow::Result<Vec<String>> {
+        Ok(self.cache.read().await.keys().cloned().collect())
     }
 }
 

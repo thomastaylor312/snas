@@ -28,4 +28,4 @@ path = "bin/server/main.rs"
 
 [[bin]]
 name = "snas"
-path = "bin/client/main.rs"
+path = "bin/cli/main.rs"

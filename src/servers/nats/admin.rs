@@ -4,8 +4,8 @@ use tracing::{instrument, trace, warn};
 
 use crate::{
     admin::{
-        AdminUserAddRequest, GroupModifyRequest, PasswordResetRequest, UserApproveRequest,
-        UserDeleteRequest, UserGetRequest,
+        AdminUserAddRequest, GroupModifyRequest, PasswordResetRequest, UserDeleteRequest,
+        UserGetRequest,
     },
     handlers::Handlers,
     ADMIN_NATS_QUEUE, ADMIN_NATS_SUBJECT,
@@ -45,9 +45,6 @@ impl NatsAdminServer {
             match split[2] {
                 "add_user" => {
                     self.handle_add_user(msg).await;
-                }
-                "approve_user" => {
-                    self.handle_approve_user(msg).await;
                 }
                 "get_user" => {
                     self.handle_get_user(msg).await;
@@ -103,42 +100,6 @@ impl NatsAdminServer {
             }
             Err(e) => {
                 send_error(&self.client, msg.reply, format!("Unable to add user: {e}")).await;
-            }
-        }
-    }
-
-    async fn handle_approve_user(&self, msg: Message) {
-        let req =
-            deserialize_body::<UserApproveRequest>(&self.client, &msg.payload, msg.reply.as_ref())
-                .await;
-        if req.is_err() {
-            // deserialize_body sends the error back for us so we can just return
-            return;
-        }
-        let req = req.unwrap();
-
-        match self.handlers.set_approval(&req.username, req.approve).await {
-            Ok(_) => {
-                send_response(
-                    &self.client,
-                    msg.reply,
-                    GenericResponse::new(
-                        true,
-                        format!(
-                            "User {} approval status set to {}",
-                            req.username, req.approve
-                        ),
-                    ),
-                )
-                .await;
-            }
-            Err(e) => {
-                send_error(
-                    &self.client,
-                    msg.reply,
-                    format!("Unable to approve user: {e}"),
-                )
-                .await;
             }
         }
     }

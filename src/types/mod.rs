@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 /// Information necessary to verify a user's credentials and identify their groups
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct UserInfo {
+    // NOTE(thomastaylor312): Because we're using Argon2, the salt is included in the hashed
+    // password
     pub hashed_password: SecureString,
     pub password_reset: Option<PasswordResetPhase>,
-    pub needs_approval: bool,
     pub groups: BTreeSet<String>,
 }
 

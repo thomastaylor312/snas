@@ -160,8 +160,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Successfully connected to bucket");
     let store = CredStore::new(bucket).await?;
 
-    // TODO: Allow setting of default groups
-    let handlers = Handlers::new(store, ["TODO".to_string()]);
+    let handlers = Handlers::new(store);
 
     let nats_user_server = if args.user_nats {
         Either::Left(

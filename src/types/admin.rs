@@ -14,13 +14,6 @@ pub struct AdminUserAddRequest {
     pub force_password_change: bool,
 }
 
-/// A request to approve or unapprove a user.
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct UserApproveRequest {
-    pub username: String,
-    pub approve: bool,
-}
-
 /// A request to get a specific user
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UserGetRequest {
@@ -38,7 +31,6 @@ pub struct UserDeleteRequest {
 pub struct UserResponse {
     pub username: String,
     pub groups: BTreeSet<String>,
-    pub approved: bool,
     pub password_change_phase: Option<PasswordResetPhase>,
 }
 

@@ -16,7 +16,6 @@ async fn test_crud() {
     let mut foo_user = UserInfo {
         hashed_password: "bar".into(),
         password_reset: None,
-        needs_approval: false,
         groups: ["foo".into()].into(),
     };
 
@@ -35,6 +34,14 @@ async fn test_crud() {
     );
     assert_eq!(user.groups, foo_user.groups, "Users should be equal");
 
+    assert!(
+        store
+            .exists("foo")
+            .await
+            .expect("Should be able to check if user exists"),
+        "User should exist"
+    );
+
     foo_user.groups.insert("bar".into());
 
     store
@@ -51,6 +58,26 @@ async fn test_crud() {
         "Users should be equal after update"
     );
 
+    // Put in a second user and then list the keys
+    let bar_user = UserInfo {
+        hashed_password: "baz".into(),
+        password_reset: None,
+        groups: ["foo".into()].into(),
+    };
+
+    store
+        .put_user("bar".into(), bar_user)
+        .await
+        .expect("Should have been able to insert a user");
+
+    let mut all_users = store
+        .list_users()
+        .await
+        .expect("Should have been able to list users");
+    all_users.sort();
+
+    assert_eq!(all_users, ["bar", "foo"], "List of users should be correct");
+
     store
         .delete_user("foo")
         .await
@@ -60,11 +87,18 @@ async fn test_crud() {
         store.get_user("foo").await.is_none(),
         "Users should not exist"
     );
+
+    // List users again to make sure we only have one
+    let all_users = store
+        .list_users()
+        .await
+        .expect("Should have been able to list users");
+    assert_eq!(all_users, ["bar"], "List of users should be correct");
 }
 
 #[tokio::test]
 async fn test_initialization() {
-    let bucket = helpers::get_store("storage_crud").await;
+    let bucket = helpers::get_store("storage_init").await;
     let store = CredStore::new(bucket.clone())
         .await
         .expect("Should have been able to initialize a CredStore");
@@ -72,13 +106,11 @@ async fn test_initialization() {
     let foo_user = UserInfo {
         hashed_password: "bar".into(),
         password_reset: None,
-        needs_approval: false,
         groups: ["foo".into()].into(),
     };
     let bar_user = UserInfo {
         hashed_password: "baz".into(),
         password_reset: None,
-        needs_approval: false,
         groups: ["foo".into()].into(),
     };
     // Insert some data
@@ -134,7 +166,6 @@ async fn test_sync() {
     let mut foo_user = UserInfo {
         hashed_password: "bar".into(),
         password_reset: None,
-        needs_approval: false,
         groups: ["foo".into()].into(),
     };
     main_store

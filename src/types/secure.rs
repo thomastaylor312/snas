@@ -101,6 +101,12 @@ impl AsRef<String> for SecureString {
     }
 }
 
+impl AsRef<[u8]> for SecureString {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
 /// A vec of bytes wrapper that will not leak credentials in logs or printing while still able to be
 /// used as a Vec<u8>. Will zero out the memory when dropped.
 #[derive(Clone, PartialEq, Eq)]
