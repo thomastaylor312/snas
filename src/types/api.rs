@@ -41,7 +41,6 @@ pub struct VerificationRequest {
 /// A verification response for a credential challenge
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VerificationResponse {
-    pub verified: bool,
     pub message: String,
     pub needs_password_reset: bool,
     pub groups: BTreeSet<String>,

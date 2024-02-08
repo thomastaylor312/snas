@@ -8,6 +8,9 @@ pub enum HandleError {
     /// An invalid password was given
     #[error("Invalid username or password")]
     InvalidCredentials,
+    /// The password was reset and has expired
+    #[error("Password reset has expired")]
+    PasswordResetExpired,
     /// The username sent for the requested operation does not exist
     #[error("Username does not exist")]
     UsernameDoesNotExist,

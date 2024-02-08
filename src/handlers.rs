@@ -44,8 +44,22 @@ impl Handlers {
         username: &str,
         password: SecureString,
     ) -> Result<VerificationResponse> {
-        // TODO: If the user has a "needs reset" set, the user must reset their password before continuing on
-        todo!()
+        let current_user = self
+            .store
+            .get_user(username)
+            .await
+            .ok_or_else(|| HandleError::UsernameDoesNotExist)?;
+
+        let current_user = self
+            .enforce_login_state(username, current_user, true)
+            .await?;
+
+        verify_password(&current_user, &password)?;
+        Ok(VerificationResponse {
+            message: "Successfully verified".to_string(),
+            needs_password_reset: current_user.password_reset.is_some(),
+            groups: current_user.groups,
+        })
     }
 
     /// Add the given user to the system. This is meant to be used by admins only
@@ -81,7 +95,27 @@ impl Handlers {
         current_password: SecureString,
         new_password: SecureString,
     ) -> Result<()> {
-        todo!()
+        let current_user = self
+            .store
+            .get_user(username)
+            .await
+            .ok_or_else(|| HandleError::UsernameDoesNotExist)?;
+
+        let mut current_user = self
+            .enforce_login_state(username, current_user, true)
+            .await?;
+
+        verify_password(&current_user, &current_password)?;
+
+        let hashed_password = hash_password(&new_password)?;
+        current_user.hashed_password = hashed_password;
+        // State should now be reset to None if we got to this point
+        current_user.password_reset = None;
+
+        self.store
+            .put_user(username.to_owned(), current_user)
+            .await
+            .map_err(HandleError::from)
     }
 
     /// Reset the password for the given user. Returns temporary token for use as a password
@@ -180,13 +214,65 @@ impl Handlers {
     pub async fn list(&self) -> Result<Vec<String>> {
         self.store.list_users().await.map_err(HandleError::from)
     }
+
+    /// Checks if a password reset is needed for the given user and updates the current phase as
+    /// needed. Returns the updated user object if successful
+    async fn enforce_login_state(
+        &self,
+        username: &str,
+        mut user: UserInfo,
+        is_password_change: bool,
+    ) -> Result<UserInfo> {
+        let (user_data, allowed) = match user.password_reset {
+            Some(PasswordResetPhase::Reset(expiry)) => {
+                let now = current_time()?;
+                if now < expiry {
+                    user.password_reset = Some(PasswordResetPhase::InitialLogin(expiry));
+                    (user, true)
+                } else {
+                    user.password_reset = Some(PasswordResetPhase::Locked);
+                    (user, false)
+                }
+            }
+            Some(PasswordResetPhase::InitialLogin(expiry)) if is_password_change => {
+                let now = current_time()?;
+                if now >= expiry {
+                    user.password_reset = Some(PasswordResetPhase::Locked);
+                    (user, false)
+                } else {
+                    // If things haven't expired, then we can just return the user. If for some reason
+                    // they mistyped their temp password, then they should be able to try again anyway
+                    return Ok(user);
+                }
+            }
+            Some(PasswordResetPhase::InitialLogin(_)) => {
+                // If this is not a password reset, then we should update to locked and deny, no
+                // matter what the expiry is
+                user.password_reset = Some(PasswordResetPhase::Locked);
+                (user, false)
+            }
+            Some(PasswordResetPhase::Locked) => {
+                // If we're locked, no update is needed, just deny
+                return Err(HandleError::PasswordResetExpired);
+            }
+            None => {
+                // In this case we don't need to modify anything and can just return the user
+                return Ok(user);
+            }
+        };
+        self.store
+            .put_user(username.to_owned(), user_data.clone())
+            .await?;
+
+        if !allowed {
+            return Err(HandleError::PasswordResetExpired);
+        }
+        Ok(user_data)
+    }
 }
 
 fn get_expiry_duration(time_to_expire: Duration) -> anyhow::Result<Duration> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|t| t + time_to_expire)
-        .context("Unable to calculate current system time")
+    current_time().map(|t| t + time_to_expire)
 }
 
 fn hash_password(password: &SecureString) -> Result<SecureString> {
@@ -199,4 +285,27 @@ fn hash_password(password: &SecureString) -> Result<SecureString> {
             HandleError::SystemError(anyhow::anyhow!("Error when hashing"))
         })
         .map(|hashed| hashed.to_string().into())
+}
+
+// Verifies that the given password matches the stored password for the given user. Returns an error
+// if validation fails or another error occurs
+fn verify_password(user: &UserInfo, password: &SecureString) -> Result<()> {
+    let password_hash = match PasswordHash::new(user.hashed_password.as_ref()) {
+        Ok(hash) => hash,
+        Err(err) => {
+            error!(%err, "Error occurred when parsing password hash. This is likely a data corruption issue!");
+            return Err(HandleError::SystemError(anyhow::anyhow!(
+                "Error when reading user"
+            )));
+        }
+    };
+    Argon2::default()
+        .verify_password(password.as_ref(), &password_hash)
+        .map_err(|_| HandleError::InvalidCredentials)
+}
+
+fn current_time() -> anyhow::Result<Duration> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .context("Unable to calculate current system time")
 }
