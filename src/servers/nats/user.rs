@@ -5,7 +5,7 @@ use tracing::{instrument, trace, warn};
 use crate::{
     api::{GenericResponse, PasswordChangeRequest, VerificationRequest},
     handlers::Handlers,
-    USER_NATS_QUEUE, USER_NATS_SUBJECT,
+    USER_NATS_QUEUE, USER_NATS_SUBJECT_PREFIX,
 };
 
 use super::*;
@@ -19,7 +19,10 @@ pub struct NatsUserServer {
 impl NatsUserServer {
     pub async fn new(handlers: Handlers, client: Client) -> anyhow::Result<Self> {
         let subscription = client
-            .queue_subscribe(USER_NATS_SUBJECT, USER_NATS_QUEUE.to_string())
+            .queue_subscribe(
+                format!("{USER_NATS_SUBJECT_PREFIX}*"),
+                USER_NATS_QUEUE.to_string(),
+            )
             .await?;
         Ok(Self {
             handlers,

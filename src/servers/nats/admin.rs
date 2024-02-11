@@ -4,11 +4,10 @@ use tracing::{instrument, trace, warn};
 
 use crate::{
     admin::{
-        AdminUserAddRequest, GroupModifyRequest, PasswordResetRequest, UserDeleteRequest,
-        UserGetRequest,
+        GroupModifyRequest, PasswordResetRequest, UserAddRequest, UserDeleteRequest, UserGetRequest,
     },
     handlers::Handlers,
-    ADMIN_NATS_QUEUE, ADMIN_NATS_SUBJECT,
+    ADMIN_NATS_QUEUE, ADMIN_NATS_SUBJECT_PREFIX,
 };
 
 use super::*;
@@ -22,7 +21,10 @@ pub struct NatsAdminServer {
 impl NatsAdminServer {
     pub async fn new(handlers: Handlers, client: Client) -> anyhow::Result<Self> {
         let subscription = client
-            .queue_subscribe(ADMIN_NATS_SUBJECT, ADMIN_NATS_QUEUE.to_string())
+            .queue_subscribe(
+                format!("{ADMIN_NATS_SUBJECT_PREFIX}*"),
+                ADMIN_NATS_QUEUE.to_string(),
+            )
             .await?;
         Ok(Self {
             handlers,
@@ -80,7 +82,7 @@ impl NatsAdminServer {
 
     async fn handle_add_user(&self, msg: Message) {
         let req =
-            deserialize_body::<AdminUserAddRequest>(&self.client, &msg.payload, msg.reply.as_ref())
+            deserialize_body::<UserAddRequest>(&self.client, &msg.payload, msg.reply.as_ref())
                 .await;
         if req.is_err() {
             // deserialize_body sends the error back for us so we can just return

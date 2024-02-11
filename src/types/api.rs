@@ -25,6 +25,39 @@ impl GenericResponse<EmptyResponse> {
             response: None,
         }
     }
+
+    /// Helper function to convert the response into an `anyhow::Result`
+    pub fn into_result_empty(self) -> anyhow::Result<()> {
+        self.into_result().map(|_| ())
+    }
+}
+
+impl<T: 'static> GenericResponse<T> {
+    /// Helper function to convert the response into an `anyhow::Result` with the contained response
+    pub fn into_result(self) -> anyhow::Result<Option<T>> {
+        if self.success {
+            Ok(self.response)
+        } else {
+            Err(anyhow::anyhow!(self.message))
+        }
+    }
+
+    /// Helper function similar to [`into_result`](Self::into_response) but returns an error if the inner response is None
+    pub fn into_result_required(self) -> anyhow::Result<T> {
+        match (self.success, self.response) {
+            (true, Some(response)) => Ok(response),
+            (true, None) => Err(anyhow::anyhow!(
+                "Request was successful but contained no response"
+            )),
+            (false, None) | (false, Some(_)) => Err(anyhow::anyhow!(self.message)),
+        }
+    }
+}
+
+impl<T: 'static> From<GenericResponse<T>> for anyhow::Result<Option<T>> {
+    fn from(response: GenericResponse<T>) -> Self {
+        response.into_result()
+    }
 }
 
 /// An empty type used when returning a response with no data

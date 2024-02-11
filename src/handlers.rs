@@ -14,7 +14,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use tracing::error;
 
 use crate::{
-    admin::{AdminUserAddRequest, PasswordResetResponse, UserResponse},
+    admin::{PasswordResetResponse, UserAddRequest, UserResponse},
     api::VerificationResponse,
     error::{HandleError, Result},
     storage::CredStore,
@@ -63,7 +63,7 @@ impl Handlers {
     }
 
     /// Add the given user to the system. This is meant to be used by admins only
-    pub async fn add(&self, req: AdminUserAddRequest) -> Result<()> {
+    pub async fn add(&self, req: UserAddRequest) -> Result<()> {
         if self.store.exists(&req.username).await? {
             return Err(HandleError::UsernameTaken);
         }

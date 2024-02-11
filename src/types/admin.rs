@@ -7,7 +7,7 @@ use crate::{types::SecureString, PasswordResetPhase};
 /// A request to create a new user with the given password and groups. This is for admin use only as
 /// users should not be able to create new groups
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AdminUserAddRequest {
+pub struct UserAddRequest {
     pub username: String,
     pub password: SecureString,
     pub groups: BTreeSet<String>,
