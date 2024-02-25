@@ -5,7 +5,7 @@ use tracing::{instrument, trace, warn};
 use crate::{
     api::{GenericResponse, PasswordChangeRequest, VerificationRequest},
     handlers::Handlers,
-    USER_NATS_QUEUE, USER_NATS_SUBJECT_PREFIX,
+    DEFAULT_USER_NATS_SUBJECT_PREFIX,
 };
 
 use super::*;
@@ -17,12 +17,19 @@ pub struct NatsUserServer {
 }
 
 impl NatsUserServer {
-    pub async fn new(handlers: Handlers, client: Client) -> anyhow::Result<Self> {
+    /// Creates a new admin server. The optional topic_prefix should be of the form
+    /// `my.custom.topic` with no trailing period. If a topic is provided and it does not have this
+    /// format, an error will be returned.
+    ///
+    /// If also running an admin server, this topic prefix MUST be different from the admin server's
+    pub async fn new(
+        handlers: Handlers,
+        client: Client,
+        topic_prefix: Option<String>,
+    ) -> anyhow::Result<Self> {
+        let subject_prefix = sanitize_topic_prefix(topic_prefix, DEFAULT_USER_NATS_SUBJECT_PREFIX)?;
         let subscription = client
-            .queue_subscribe(
-                format!("{USER_NATS_SUBJECT_PREFIX}*"),
-                USER_NATS_QUEUE.to_string(),
-            )
+            .queue_subscribe(format!("{subject_prefix}.*"), subject_prefix)
             .await?;
         Ok(Self {
             handlers,

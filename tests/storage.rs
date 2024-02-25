@@ -1,6 +1,6 @@
 use snas::{storage::CredStore, UserInfo};
 
-mod helpers;
+pub mod helpers;
 
 #[tokio::test]
 async fn test_crud() {

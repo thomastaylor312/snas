@@ -13,7 +13,7 @@ use crate::{
         EmptyResponse, GenericResponse, PasswordChangeRequest, VerificationRequest,
         VerificationResponse,
     },
-    SecureString, ADMIN_NATS_SUBJECT_PREFIX, USER_NATS_SUBJECT_PREFIX,
+    SecureString, DEFAULT_ADMIN_NATS_SUBJECT_PREFIX, DEFAULT_USER_NATS_SUBJECT_PREFIX,
 };
 
 pub struct NatsClient {
@@ -42,7 +42,7 @@ impl super::UserClient for NatsClient {
         username: &str,
         password: SecureString,
     ) -> anyhow::Result<VerificationResponse> {
-        let subject = format!("{USER_NATS_SUBJECT_PREFIX}.verify");
+        let subject = format!("{DEFAULT_USER_NATS_SUBJECT_PREFIX}.verify");
         let payload = VerificationRequest {
             username: username.to_string(),
             password,
@@ -59,7 +59,7 @@ impl super::UserClient for NatsClient {
         old_password: SecureString,
         new_password: SecureString,
     ) -> anyhow::Result<()> {
-        let subject = format!("{USER_NATS_SUBJECT_PREFIX}.change_password");
+        let subject = format!("{DEFAULT_USER_NATS_SUBJECT_PREFIX}.change_password");
         let payload = PasswordChangeRequest {
             username: username.to_string(),
             old_password,
@@ -79,7 +79,7 @@ impl super::AdminClient for NatsClient {
         groups: BTreeSet<String>,
         force_password_change: bool,
     ) -> anyhow::Result<()> {
-        let subject = format!("{ADMIN_NATS_SUBJECT_PREFIX}.add_user");
+        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.add_user");
         let payload = UserAddRequest {
             username: username.to_string(),
             password,
@@ -91,7 +91,7 @@ impl super::AdminClient for NatsClient {
     }
 
     async fn get_user(&self, username: &str) -> anyhow::Result<UserResponse> {
-        let subject = format!("{ADMIN_NATS_SUBJECT_PREFIX}.get_user");
+        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.get_user");
         let payload = UserGetRequest {
             username: username.to_string(),
         };
@@ -101,14 +101,14 @@ impl super::AdminClient for NatsClient {
     }
 
     async fn list_users(&self) -> anyhow::Result<Vec<String>> {
-        let subject = format!("{ADMIN_NATS_SUBJECT_PREFIX}.list_users");
+        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.list_users");
         let resp: GenericResponse<Vec<String>> = self.do_request(subject, &()).await?;
         resp.into_result_required()
             .context("Error while listing users")
     }
 
     async fn remove_user(&self, username: &str) -> anyhow::Result<()> {
-        let subject = format!("{ADMIN_NATS_SUBJECT_PREFIX}.remove_user");
+        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.remove_user");
         let payload = UserDeleteRequest {
             username: username.to_string(),
         };
@@ -118,7 +118,7 @@ impl super::AdminClient for NatsClient {
     }
 
     async fn reset_password(&self, username: &str) -> anyhow::Result<PasswordResetResponse> {
-        let subject = format!("{ADMIN_NATS_SUBJECT_PREFIX}.reset_password");
+        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.reset_password");
         let payload = PasswordResetRequest {
             username: username.to_string(),
         };
@@ -133,7 +133,7 @@ impl super::AdminClient for NatsClient {
         username: &str,
         groups: BTreeSet<String>,
     ) -> anyhow::Result<BTreeSet<String>> {
-        let subject = format!("{ADMIN_NATS_SUBJECT_PREFIX}.add_groups");
+        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.add_groups");
         let payload = GroupModifyRequest {
             username: username.to_string(),
             groups,
@@ -148,7 +148,7 @@ impl super::AdminClient for NatsClient {
         username: &str,
         groups: BTreeSet<String>,
     ) -> anyhow::Result<BTreeSet<String>> {
-        let subject = format!("{ADMIN_NATS_SUBJECT_PREFIX}.remove_groups");
+        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.remove_groups");
         let payload = GroupModifyRequest {
             username: username.to_string(),
             groups,

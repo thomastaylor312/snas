@@ -71,6 +71,16 @@ struct Args {
     )]
     admin_nats: bool,
 
+    /// An optional topic prefix to use for the admin NATS API. If this is not provided, the default
+    /// `snas.admin` will be used. Requires the `--admin-nats` flag to be set
+    #[arg(
+        id = "admin_nats_topic_prefix",
+        long = "admin-nats-topic-prefix",
+        env = "SNAS_ADMIN_NATS_TOPIC_PREFIX",
+        requires = "admin_nats"
+    )]
+    admin_nats_topic_prefix: Option<String>,
+
     /// Listen on the user NATS API topics. By default this is off as listening to this on a host
     /// with a leaf node could allow anonymous access to the user API
     #[arg(
@@ -80,6 +90,16 @@ struct Args {
         default_value_t = false
     )]
     user_nats: bool,
+
+    /// An optional topic prefix to use for the user NATS API. If this is not provided, the default
+    /// `snas.user` will be used. Requires the `--user-nats` flag to be set
+    #[arg(
+        id = "user_nats_topic_prefix",
+        long = "user-nats-topic-prefix",
+        env = "SNAS_USER_NATS_TOPIC_PREFIX",
+        requires = "user_nats"
+    )]
+    user_nats_topic_prefix: Option<String>,
 
     /// The path to the socket file to use for the user API. This should exist in a directory that
     /// is only accessible to root or other super admins so as to not be abused
@@ -164,9 +184,13 @@ async fn main() -> anyhow::Result<()> {
 
     let nats_user_server = if args.user_nats {
         Either::Left(
-            NatsUserServer::new(handlers.clone(), client.clone())
-                .await?
-                .run(),
+            NatsUserServer::new(
+                handlers.clone(),
+                client.clone(),
+                args.user_nats_topic_prefix,
+            )
+            .await?
+            .run(),
         )
     } else {
         Either::Right(pending::<anyhow::Result<()>>())
@@ -174,9 +198,13 @@ async fn main() -> anyhow::Result<()> {
 
     let nats_admin_server = if args.admin_nats {
         Either::Left(
-            NatsAdminServer::new(handlers.clone(), client.clone())
-                .await?
-                .run(),
+            NatsAdminServer::new(
+                handlers.clone(),
+                client.clone(),
+                args.admin_nats_topic_prefix,
+            )
+            .await?
+            .run(),
         )
     } else {
         Either::Right(pending::<anyhow::Result<()>>())
