@@ -16,6 +16,7 @@ pub struct NatsAdminServer {
     handlers: Handlers,
     client: Client,
     subscription: Subscriber,
+    prefix: String,
 }
 
 impl NatsAdminServer {
@@ -30,29 +31,35 @@ impl NatsAdminServer {
         topic_prefix: Option<String>,
     ) -> anyhow::Result<Self> {
         let subject_prefix =
-            sanitize_topic_prefix(topic_prefix, DEFAULT_ADMIN_NATS_SUBJECT_PREFIX)?;
+            crate::sanitize_topic_prefix(topic_prefix, DEFAULT_ADMIN_NATS_SUBJECT_PREFIX)?;
         let subscription = client
-            .queue_subscribe(format!("{subject_prefix}.*"), subject_prefix)
+            .queue_subscribe(format!("{subject_prefix}.*"), subject_prefix.clone())
             .await?;
         Ok(Self {
             handlers,
             subscription,
             client,
+            prefix: subject_prefix,
         })
     }
 
     #[instrument(level = "info", skip(self))]
     pub async fn run(mut self) -> anyhow::Result<()> {
         while let Some(msg) = self.subscription.next().await {
-            let split: Vec<&str> = msg.subject.split('.').collect();
-            if split.len() != 3 {
-                warn!(subject = %msg.subject, "invalid subject received");
-                continue;
-            }
-            if split[1] != "admin" {
-                warn!(subject = %msg.subject, "non-admin subject received");
-            }
-            match split[2] {
+            let action = match msg.subject.strip_prefix(&self.prefix) {
+                Some(a) => a.trim_start_matches('.'),
+                None => {
+                    warn!(subject = %msg.subject, "invalid subject received");
+                    send_error(
+                        &self.client,
+                        msg.reply,
+                        format!("invalid subject {}", msg.subject),
+                    )
+                    .await;
+                    continue;
+                }
+            };
+            match action {
                 "add_user" => {
                     self.handle_add_user(msg).await;
                 }
@@ -79,7 +86,7 @@ impl NatsAdminServer {
                     send_error(
                         &self.client,
                         msg.reply,
-                        format!("invalid api method {}", split[2]),
+                        format!("invalid api method {}", action),
                     )
                     .await;
                 }

@@ -48,7 +48,7 @@ impl Handlers {
             .store
             .get_user(username)
             .await
-            .ok_or_else(|| HandleError::UsernameDoesNotExist)?;
+            .ok_or_else(|| HandleError::InvalidCredentials)?;
 
         let current_user = self
             .enforce_login_state(username, current_user, true)
@@ -56,6 +56,7 @@ impl Handlers {
 
         verify_password(&current_user, &password)?;
         Ok(VerificationResponse {
+            valid: true,
             message: "Successfully verified".to_string(),
             needs_password_reset: current_user.password_reset.is_some(),
             groups: current_user.groups,
@@ -99,7 +100,7 @@ impl Handlers {
             .store
             .get_user(username)
             .await
-            .ok_or_else(|| HandleError::UsernameDoesNotExist)?;
+            .ok_or_else(|| HandleError::InvalidCredentials)?;
 
         let mut current_user = self
             .enforce_login_state(username, current_user, true)

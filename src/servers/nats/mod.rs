@@ -7,21 +7,6 @@ use crate::types::api::{EmptyResponse, GenericResponse};
 pub mod admin;
 pub mod user;
 
-fn sanitize_topic_prefix(prefix: Option<String>, default_prefix: &str) -> anyhow::Result<String> {
-    match prefix {
-        Some(prefix) => {
-            let trimmed = prefix.trim();
-            if trimmed.ends_with('.') {
-                return Err(anyhow::anyhow!(
-                    "topic_prefix must not end with a period, e.g. my.custom.topic"
-                ));
-            }
-            Ok(trimmed.to_string())
-        }
-        None => Ok(default_prefix.to_string()),
-    }
-}
-
 async fn send_error(client: &Client, reply: Option<Subject>, message: String) {
     if let Some(reply) = reply {
         if let Err(err) = client

@@ -18,11 +18,40 @@ use crate::{
 
 pub struct NatsClient {
     client: Client,
+    user_topic_prefix: String,
+    admin_topic_prefix: String,
 }
 
 impl NatsClient {
+    /// Creates a new client, using the default topic prefixes.
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            user_topic_prefix: DEFAULT_USER_NATS_SUBJECT_PREFIX.to_string(),
+            admin_topic_prefix: DEFAULT_ADMIN_NATS_SUBJECT_PREFIX.to_string(),
+        }
+    }
+
+    /// Creates a new client using the given topic prefixes. The optional topic_prefix should be of
+    /// the form `my.custom.topic` with no trailing period. If a topic is provided and it does not
+    /// have this format, an error will be returned. If `None` is passed as a topic prefix, the
+    /// default topic prefix will be used.
+    pub fn new_with_prefix(
+        client: Client,
+        user_topic_prefix: Option<String>,
+        admin_topic_prefix: Option<String>,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            client,
+            user_topic_prefix: crate::sanitize_topic_prefix(
+                user_topic_prefix,
+                DEFAULT_USER_NATS_SUBJECT_PREFIX,
+            )?,
+            admin_topic_prefix: crate::sanitize_topic_prefix(
+                admin_topic_prefix,
+                DEFAULT_ADMIN_NATS_SUBJECT_PREFIX,
+            )?,
+        })
     }
 
     async fn do_request<T: Serialize, R: DeserializeOwned>(
@@ -42,7 +71,7 @@ impl super::UserClient for NatsClient {
         username: &str,
         password: SecureString,
     ) -> anyhow::Result<VerificationResponse> {
-        let subject = format!("{DEFAULT_USER_NATS_SUBJECT_PREFIX}.verify");
+        let subject = format!("{}.verify", self.user_topic_prefix);
         let payload = VerificationRequest {
             username: username.to_string(),
             password,
@@ -59,7 +88,7 @@ impl super::UserClient for NatsClient {
         old_password: SecureString,
         new_password: SecureString,
     ) -> anyhow::Result<()> {
-        let subject = format!("{DEFAULT_USER_NATS_SUBJECT_PREFIX}.change_password");
+        let subject = format!("{}.change_password", self.user_topic_prefix);
         let payload = PasswordChangeRequest {
             username: username.to_string(),
             old_password,
@@ -79,7 +108,7 @@ impl super::AdminClient for NatsClient {
         groups: BTreeSet<String>,
         force_password_change: bool,
     ) -> anyhow::Result<()> {
-        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.add_user");
+        let subject = format!("{}.add_user", self.admin_topic_prefix);
         let payload = UserAddRequest {
             username: username.to_string(),
             password,
@@ -91,7 +120,7 @@ impl super::AdminClient for NatsClient {
     }
 
     async fn get_user(&self, username: &str) -> anyhow::Result<UserResponse> {
-        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.get_user");
+        let subject = format!("{}.get_user", self.admin_topic_prefix);
         let payload = UserGetRequest {
             username: username.to_string(),
         };
@@ -101,14 +130,14 @@ impl super::AdminClient for NatsClient {
     }
 
     async fn list_users(&self) -> anyhow::Result<Vec<String>> {
-        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.list_users");
+        let subject = format!("{}.list_users", self.admin_topic_prefix);
         let resp: GenericResponse<Vec<String>> = self.do_request(subject, &()).await?;
         resp.into_result_required()
             .context("Error while listing users")
     }
 
     async fn remove_user(&self, username: &str) -> anyhow::Result<()> {
-        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.remove_user");
+        let subject = format!("{}.remove_user", self.admin_topic_prefix);
         let payload = UserDeleteRequest {
             username: username.to_string(),
         };
@@ -118,7 +147,7 @@ impl super::AdminClient for NatsClient {
     }
 
     async fn reset_password(&self, username: &str) -> anyhow::Result<PasswordResetResponse> {
-        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.reset_password");
+        let subject = format!("{}.reset_password", self.admin_topic_prefix);
         let payload = PasswordResetRequest {
             username: username.to_string(),
         };
@@ -133,7 +162,7 @@ impl super::AdminClient for NatsClient {
         username: &str,
         groups: BTreeSet<String>,
     ) -> anyhow::Result<BTreeSet<String>> {
-        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.add_groups");
+        let subject = format!("{}.add_groups", self.admin_topic_prefix);
         let payload = GroupModifyRequest {
             username: username.to_string(),
             groups,
@@ -148,7 +177,7 @@ impl super::AdminClient for NatsClient {
         username: &str,
         groups: BTreeSet<String>,
     ) -> anyhow::Result<BTreeSet<String>> {
-        let subject = format!("{DEFAULT_ADMIN_NATS_SUBJECT_PREFIX}.remove_groups");
+        let subject = format!("{}.remove_groups", self.admin_topic_prefix);
         let payload = GroupModifyRequest {
             username: username.to_string(),
             groups,
