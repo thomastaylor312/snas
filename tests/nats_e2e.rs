@@ -1,13 +1,14 @@
 use snas::admin::UserAddRequest;
 use snas::clients::NatsClient;
+use snas::PasswordResetPhase;
 
 pub mod helpers;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_user_api() {
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .init();
+        .try_init();
     let bundle = helpers::TestBundle::new("user_api", |client, handlers| async move {
         let user_api = snas::servers::nats::user::NatsUserServer::new(
             handlers,
@@ -97,5 +98,156 @@ async fn test_user_api() {
     assert!(resp.valid, "Should verify with new password");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_admin_api() {
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .try_init();
+    let bundle = helpers::TestBundle::new("admin_api", |client, handlers| async move {
+        let admin_api = snas::servers::nats::admin::NatsAdminServer::new(
+            handlers,
+            client,
+            Some("test.admin.api".to_string()),
+        )
+        .await
+        .expect("Should be able to initialize a admin server");
+
+        admin_api.run().await
+    })
+    .await;
+
+    let admin_client = NatsClient::new_with_prefix(
+        bundle.client.clone(),
+        Some("notused".to_string()),
+        Some("test.admin.api".to_string()),
+    )
+    .unwrap();
+
+    use snas::clients::AdminClient;
+
+    admin_client
+        .add_user("foo", "easy123".into(), ["foo".into()].into(), false)
+        .await
+        .expect("Should be able to add user");
+
+    let user = admin_client
+        .get_user("foo")
+        .await
+        .expect("Should be able to get user");
+    assert_eq!(
+        user.username, "foo",
+        "User should have the correct username"
+    );
+    assert_eq!(
+        user.groups,
+        ["foo".into()].into(),
+        "User should have the correct groups"
+    );
+    assert!(
+        user.password_change_phase.is_none(),
+        "User should not be locked"
+    );
+
+    // Getting a non-existent user should error
+    admin_client
+        .get_user("bar")
+        .await
+        .expect_err("Should not be able to get non-existent user");
+
+    // Add one more user for testing
+    admin_client
+        .add_user("bar", "easy123".into(), ["bar".into()].into(), false)
+        .await
+        .expect("Should be able to add user");
+
+    // Test listing users
+    let mut list_users_result = admin_client
+        .list_users()
+        .await
+        .expect("Should be able to list users");
+    assert_eq!(list_users_result.len(), 2);
+    list_users_result.sort();
+    assert_eq!(
+        list_users_result,
+        ["bar".to_string(), "foo".to_string()],
+        "Should have the correct users"
+    );
+
+    // Test removing a user
+    admin_client
+        .remove_user("foo")
+        .await
+        .expect("Should be able to remove user");
+
+    admin_client
+        .get_user("foo")
+        .await
+        .expect_err("Should not be able to get deleted user");
+
+    // Test resetting a user's password
+    admin_client
+        .reset_password("bar")
+        .await
+        .expect("Should be able to reset password");
+
+    let user = admin_client
+        .get_user("bar")
+        .await
+        .expect("Should be able to get user");
+    assert!(
+        matches!(
+            user.password_change_phase
+                .expect("Should have a password change phase"),
+            PasswordResetPhase::Reset(_)
+        ),
+        "User should be in the reset phase",
+    );
+
+    // Test adding groups to a user
+    let add_groups_result = admin_client
+        .add_groups("bar", ["group1".to_string(), "group2".to_string()].into())
+        .await
+        .expect("Should be able to add groups");
+    assert_eq!(
+        add_groups_result,
+        ["group1".into(), "group2".into(), "bar".into()].into(),
+        "Should have the correct groups after add"
+    );
+
+    // Make sure when we fetch the user, the groups are correct
+    let user = admin_client
+        .get_user("bar")
+        .await
+        .expect("Should be able to get user");
+
+    assert_eq!(
+        user.groups,
+        ["bar".into(), "group1".into(), "group2".into()].into(),
+        "Should have the correct groups after add"
+    );
+
+    // Test removing groups from a user
+    let remove_groups_result = admin_client
+        .remove_groups("bar", ["group1".into()].into())
+        .await
+        .expect("Should be able to remove groups");
+    assert_eq!(
+        remove_groups_result,
+        ["group2".into(), "bar".into()].into(),
+        "Should have the correct groups after delete"
+    );
+
+    // Make sure when we fetch the user, the groups are correct
+    let user = admin_client
+        .get_user("bar")
+        .await
+        .expect("Should be able to get user");
+
+    assert_eq!(
+        user.groups,
+        ["bar".into(), "group2".into()].into(),
+        "Should have the correct groups after delete"
+    );
+}
+
 // TODO: password reset flow
-// TODO: admin server

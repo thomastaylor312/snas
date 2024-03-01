@@ -288,7 +288,7 @@ impl NatsAdminServer {
         }
         let req = req.unwrap();
 
-        match self.handlers.add_groups(&req.username, req.groups).await {
+        match self.handlers.delete_groups(&req.username, req.groups).await {
             Ok(resp) => {
                 send_response(
                     &self.client,

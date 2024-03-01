@@ -73,6 +73,8 @@ impl TestBundle {
         let handlers = snas::handlers::Handlers::new(store);
         let fut = constructor(client.clone(), handlers.clone());
         let handle = tokio::spawn(fut);
+        // Give things a sec to put their pants on
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         Self {
             client,
             handle,
