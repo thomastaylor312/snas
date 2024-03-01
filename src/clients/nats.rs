@@ -9,10 +9,7 @@ use crate::{
         GroupModifyRequest, PasswordResetRequest, PasswordResetResponse, UserAddRequest,
         UserDeleteRequest, UserGetRequest, UserResponse,
     },
-    api::{
-        EmptyResponse, GenericResponse, PasswordChangeRequest, VerificationRequest,
-        VerificationResponse,
-    },
+    api::{GenericResponse, PasswordChangeRequest, VerificationRequest, VerificationResponse},
     SecureString, DEFAULT_ADMIN_NATS_SUBJECT_PREFIX, DEFAULT_USER_NATS_SUBJECT_PREFIX,
 };
 
@@ -94,7 +91,7 @@ impl super::UserClient for NatsClient {
             old_password,
             new_password,
         };
-        let resp: GenericResponse<EmptyResponse> = self.do_request(subject, &payload).await?;
+        let resp: GenericResponse<()> = self.do_request(subject, &payload).await?;
         resp.into_result_empty()
             .context("Error while changing password")
     }
@@ -115,7 +112,7 @@ impl super::AdminClient for NatsClient {
             groups,
             force_password_change,
         };
-        let resp: GenericResponse<EmptyResponse> = self.do_request(subject, &payload).await?;
+        let resp: GenericResponse<()> = self.do_request(subject, &payload).await?;
         resp.into_result_empty().context("Error while adding user")
     }
 
@@ -141,7 +138,7 @@ impl super::AdminClient for NatsClient {
         let payload = UserDeleteRequest {
             username: username.to_string(),
         };
-        let resp: GenericResponse<EmptyResponse> = self.do_request(subject, &payload).await?;
+        let resp: GenericResponse<()> = self.do_request(subject, &payload).await?;
         resp.into_result_empty()
             .context("Error while removing user")
     }

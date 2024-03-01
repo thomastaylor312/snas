@@ -2,7 +2,7 @@ use async_nats::{Client, Subject};
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::error;
 
-use crate::types::api::{EmptyResponse, GenericResponse};
+use crate::types::api::GenericResponse;
 
 pub mod admin;
 pub mod user;
@@ -12,13 +12,9 @@ async fn send_error(client: &Client, reply: Option<Subject>, message: String) {
         if let Err(err) = client
             .publish(
                 reply,
-                serde_json::to_vec(&GenericResponse::<EmptyResponse> {
-                    success: false,
-                    message,
-                    response: None,
-                })
-                .expect("Unable to serialize generic response, this is likely programmer error")
-                .into(),
+                serde_json::to_vec(&GenericResponse::new(false, message))
+                    .expect("Unable to serialize generic response, this is likely programmer error")
+                    .into(),
             )
             .await
         {

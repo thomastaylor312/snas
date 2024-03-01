@@ -16,7 +16,7 @@ pub struct GenericResponse<T: 'static> {
     pub response: Option<T>,
 }
 
-impl GenericResponse<EmptyResponse> {
+impl GenericResponse<()> {
     /// Create a new response with no response data
     pub fn new(success: bool, message: String) -> Self {
         Self {
@@ -59,10 +59,6 @@ impl<T: 'static> From<GenericResponse<T>> for anyhow::Result<Option<T>> {
         response.into_result()
     }
 }
-
-/// An empty type used when returning a response with no data
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct EmptyResponse;
 
 /// A verification request for a credential challenge
 #[derive(Serialize, Deserialize, Debug, Clone)]
