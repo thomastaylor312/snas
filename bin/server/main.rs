@@ -31,11 +31,6 @@ struct Args {
     kv_bucket: String,
 
     // TODO: NATS creds
-    /// The admin username to use by default. If this admin user already exists, it will not be
-    /// created again
-    #[arg(long = "admin-user", default_value = "admin", env = "SNAS_ADMIN_USER")]
-    admin_user: String,
-
     /// The admin password to use by default. If this admin user already exists, it will not
     /// overwrite the current admin password
     #[arg(
@@ -55,6 +50,7 @@ struct Args {
         env = "SNAS_LISTEN_ADDRESS"
     )]
     listen_address: String,
+
     // TODO: Do we need some sort of domain/realm thing so we can support multiple groups of users
     // in the future?
     /// Use json formatted logs
@@ -103,8 +99,9 @@ struct Args {
 
     /// The path to the socket file to use for the user API. This should exist in a directory that
     /// is only accessible to root or other super admins so as to not be abused
-    // TODO(thomastaylor312): This default won't work on Windows, so we will need to figure out a
-    // sensible default and set it via cfg_attr
+    // TODO(thomastaylor312): Use named pipes on Windows instead as UDS support isn't in the
+    // standard library or Tokio yet (and it might take a bit)
+    #[cfg(unix)]
     #[arg(
         id = "socket_file",
         long = "socket-file",
@@ -112,15 +109,6 @@ struct Args {
         required_unless_present_any = ["admin_socket_file", "admin_nats", "user_nats"],
     )]
     socket_file: PathBuf,
-
-    /// The path to the socket file to use for the admin API. This should exist in a directory that
-    /// is only accessible to root or other super admins so as to not be abused
-    #[arg(
-        id = "admin_socket_file",
-        long = "admin-socket-file",
-        env = "SNAS_ADMIN_SOCKET_FILE"
-    )]
-    admin_socket_file: Option<PathBuf>,
 
     /// The default user to create if one does not already exist. This user will be created with
     /// the password specified by the `--password` flag

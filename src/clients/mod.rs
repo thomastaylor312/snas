@@ -8,6 +8,7 @@ use crate::{
 };
 
 mod nats;
+#[cfg(unix)]
 mod socket;
 
 pub use nats::NatsClient;

@@ -25,27 +25,6 @@ impl UserSocket {
     }
 }
 
-pub struct AdminSocket {
-    handlers: Handlers,
-    socket: UnixListener,
-}
-
-impl AdminSocket {
-    pub async fn new(handlers: Handlers, socket_path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        Ok(Self {
-            handlers,
-            socket: get_socket(socket_path).await?,
-        })
-    }
-
-    pub async fn run(self) -> anyhow::Result<()> {
-        loop {
-            let (stream, _) = self.socket.accept().await?;
-        }
-        todo!("Handle socket connection")
-    }
-}
-
 async fn get_socket(socket_path: impl AsRef<Path>) -> anyhow::Result<UnixListener> {
     match tokio::fs::remove_file(&socket_path).await {
         Ok(_) => {}

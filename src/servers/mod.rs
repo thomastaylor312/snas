@@ -1,4 +1,3 @@
 pub mod nats;
-mod socket;
-
-pub use socket::*;
+#[cfg(unix)]
+pub mod socket;
