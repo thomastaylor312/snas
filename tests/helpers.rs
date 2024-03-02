@@ -50,6 +50,7 @@ pub async fn get_client() -> async_nats::Client {
 
 pub struct TestBundle {
     pub client: async_nats::Client,
+    pub store: async_nats::jetstream::kv::Store,
     pub handle: JoinHandle<anyhow::Result<()>>,
     pub handlers: snas::handlers::Handlers,
 }
@@ -67,7 +68,8 @@ impl TestBundle {
         Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
     {
         let client = get_client().await;
-        let store = CredStore::new(get_store_from_client(client.clone(), test_name).await)
+        let nats_store = get_store_from_client(client.clone(), test_name).await;
+        let store = CredStore::new(nats_store.clone())
             .await
             .expect("Should have been able to initialize a CredStore");
         let handlers = snas::handlers::Handlers::new(store);
@@ -77,6 +79,7 @@ impl TestBundle {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         Self {
             client,
+            store: nats_store,
             handle,
             handlers,
         }

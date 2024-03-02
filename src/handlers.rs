@@ -51,7 +51,7 @@ impl Handlers {
             .ok_or_else(|| HandleError::InvalidCredentials)?;
 
         let current_user = self
-            .enforce_login_state(username, current_user, true)
+            .enforce_login_state(username, current_user, false)
             .await?;
 
         verify_password(&current_user, &password)?;

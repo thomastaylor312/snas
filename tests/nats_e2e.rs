@@ -1,6 +1,10 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use futures::future::Either;
+use futures::FutureExt;
 use snas::admin::UserAddRequest;
 use snas::clients::NatsClient;
-use snas::PasswordResetPhase;
+use snas::{PasswordResetPhase, UserInfo};
 
 pub mod helpers;
 
@@ -250,4 +254,173 @@ async fn test_admin_api() {
     );
 }
 
-// TODO: password reset flow
+#[tokio::test(flavor = "multi_thread")]
+async fn test_password_reset_flow() {
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .try_init();
+    let bundle = helpers::TestBundle::new("password_reset_flow", |client, handlers| async move {
+        let admin_api = snas::servers::nats::admin::NatsAdminServer::new(
+            handlers.clone(),
+            client.clone(),
+            Some("test.admin.password".to_string()),
+        )
+        .await
+        .expect("Should be able to initialize a admin server");
+        let user_api = snas::servers::nats::user::NatsUserServer::new(
+            handlers,
+            client,
+            Some("test.user.password".to_string()),
+        )
+        .await
+        .expect("Should be able to initialize a user server");
+
+        futures::future::select_ok([
+            Either::Left(admin_api.run().boxed()),
+            Either::Right(user_api.run().boxed()),
+        ])
+        .map(|val| val.map(|data| data.0))
+        .await
+    })
+    .await;
+
+    let client = NatsClient::new_with_prefix(
+        bundle.client.clone(),
+        Some("test.user.password".to_string()),
+        Some("test.admin.password".to_string()),
+    )
+    .unwrap();
+
+    use snas::clients::{AdminClient, UserClient};
+
+    // Add a user for the test
+    client
+        .add_user("foo", "easy123".into(), ["foo".into()].into(), true)
+        .await
+        .expect("Should be able to add user");
+
+    // Try doing a password reset on the first login
+    client
+        .change_password("foo", "easy123".into(), "easy1234".into())
+        .await
+        .expect("Should be able to change password");
+
+    let resp = client
+        .verify("foo", "easy1234".into())
+        .await
+        .expect("Should be able to log in after reset");
+    assert!(
+        !resp.needs_password_reset,
+        "Should not need a password reset"
+    );
+    assert!(resp.valid, "Should be able to log in after reset");
+
+    // Force a password reset, log in once, and then try to change the password
+    let password = client
+        .reset_password("foo")
+        .await
+        .expect("Should be able to reset password")
+        .temp_password;
+    let resp = client
+        .verify("foo", password.clone())
+        .await
+        .expect("Should be able to log in");
+    assert!(resp.needs_password_reset, "Should need a password reset");
+    assert!(resp.valid, "Should be able to log in");
+
+    let user = client
+        .get_user("foo")
+        .await
+        .expect("Should be able to get user");
+    assert!(
+        matches!(
+            user.password_change_phase.unwrap(),
+            PasswordResetPhase::InitialLogin(_)
+        ),
+        "User should be in the initial login phase",
+    );
+
+    // Now try to change the password and make sure we still can
+    client
+        .change_password("foo", password, "easy12345".into())
+        .await
+        .expect("Should be able to change password");
+
+    // Try to log in with the new password
+    let resp = client
+        .verify("foo", "easy12345".into())
+        .await
+        .expect("Should be able to log in after reset");
+    assert!(
+        !resp.needs_password_reset,
+        "Should not need a password reset"
+    );
+    assert!(resp.valid, "Should be able to log in after reset");
+
+    // Reset one more time and then try to log in twice
+    let password = client
+        .reset_password("foo")
+        .await
+        .expect("Should be able to reset password")
+        .temp_password;
+    let resp = client
+        .verify("foo", password.clone())
+        .await
+        .expect("Should be able to log in");
+    assert!(resp.needs_password_reset, "Should need a password reset");
+    assert!(resp.valid, "Should be able to log in");
+
+    let resp = client
+        .verify("foo", password.clone())
+        .await
+        .expect("Should be able to verify");
+    assert!(
+        !resp.valid,
+        "Should not be able to log in after second login attempt"
+    );
+
+    let user = client
+        .get_user("foo")
+        .await
+        .expect("Should be able to get user");
+    assert!(
+        matches!(
+            user.password_change_phase.unwrap(),
+            PasswordResetPhase::Locked,
+        ),
+        "User should be in the locked phase",
+    );
+
+    // This is a little janky, but we need to set an already expired timestamp for testing expiry
+    let raw = bundle
+        .store
+        .get("foo")
+        .await
+        .expect("Should be able to fetch data from store")
+        .expect("User should exist in store");
+    let (mut data, _): (UserInfo, _) =
+        bincode::decode_from_slice(&raw, bincode::config::standard()).unwrap();
+    data.password_reset = Some(PasswordResetPhase::Reset(
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap() - std::time::Duration::from_secs(300),
+    ));
+    let encoded = bincode::encode_to_vec(&data, bincode::config::standard()).unwrap();
+    bundle
+        .store
+        .put("foo", encoded.into())
+        .await
+        .expect("Should be able to put data in store");
+
+    // Try to log in
+    let resp = client
+        .verify("foo", password)
+        .await
+        .expect("Should be able to verify");
+    assert!(
+        !resp.valid,
+        "Should not be able to log in after password reset has expired"
+    );
+    assert!(
+        resp.needs_password_reset,
+        "Should need a password reset after password reset has expired"
+    );
+}
