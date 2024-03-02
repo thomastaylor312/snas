@@ -19,6 +19,7 @@ this for two main reasons (beyond having fun writing it):
 
 ## Is this ready to use?
 
-Not even remotely! I'll try to keep this README up to date with the current status, or you can also
-follow along in the files. If for some reason this project interests you, please reach out and let
-me know! It will give me motivation to work on it even more.
+It is getting closer! Currently I have the API all built out for NATS, along with e2e tests. I still
+need to build the socket API and then PAM modules for linux. I'll try to keep this README up to date
+with the current status, or you can also follow along in the files. If for some reason this project
+interests you, please reach out and let me know! It will give me motivation to work on it even more.
