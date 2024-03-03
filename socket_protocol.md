@@ -9,18 +9,14 @@ This document describes the lightweight protocol used by SNAS to communicate wit
 Each request MUST be written to the socket in the following format:
 
 ```
-REQ\n<method>\n<json-data>\r\r\n\nEND
+REQ\n<method>\n<json-data>\r\nEND\n
 ```
-
-In prose, that the the string literal `REQ`, followed by a newline, then the method being called, followed by a newline, then the JSON data for the request, followed by two carriage returns, two newlines, then the string literal `END`. 
 
 The response must be written to the socket in the following format:
 
 ```
-RES\n<json-data>\r\r\n\nEND
+RES\n<json-data>\r\nEND\n
 ```
-
-In prose, that the string literal `RES`, followed by a newline, then the JSON data for the response, followed by two carriage returns and two newlines, then the string literal `END`.
 
 The server does not make any guarantees about request timeout for partially written requests (i.e. it can wait for any length of time for the rest of a request to be written), but it MUST send a response if it does choose to timeout.
 

@@ -9,6 +9,9 @@ pub use types::*;
 
 pub(crate) const DEFAULT_ADMIN_NATS_SUBJECT_PREFIX: &str = "snas.admin";
 pub(crate) const DEFAULT_USER_NATS_SUBJECT_PREFIX: &str = "snas.user";
+pub(crate) const REQUEST_IDENTIFIER: &[u8] = "REQ\n".as_bytes();
+pub(crate) const RESPONSE_IDENTIFIER: &[u8] = "RES\n".as_bytes();
+pub(crate) const TERMINATOR: &[u8] = "\nEND\n".as_bytes();
 
 pub(crate) fn sanitize_topic_prefix(
     prefix: Option<String>,
