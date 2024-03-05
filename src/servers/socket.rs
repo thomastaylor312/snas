@@ -76,7 +76,26 @@ impl SocketHandler {
                     return Ok(());
                 }
                 Err(ParseError::BadRequest(e)) => {
-                    error!("Error parsing request: {}", e);
+                    // We have to consume the leftover here if we have a malformed request, so we
+                    // have a nested block here
+                    match consume_leftover(&mut self.stream).await {
+                        // We don't return bad request from consume_leftover, so we can continue on
+                        Ok(_) | Err(ParseError::BadRequest(_)) => (),
+                        Err(ParseError::ConnectionClosed) => {
+                            if let Err(e) = self.stream.shutdown().await {
+                                // This isn't fatal, but we should log
+                                error!(err= %e, "Error shutting down socket cleanly");
+                            }
+                            return Ok(());
+                        }
+                        Err(ParseError::Error(e)) => {
+                            if let Err(e) = self.stream.shutdown().await {
+                                // This isn't fatal, but we should log
+                                error!(err= %e, "Error shutting down socket cleanly");
+                            }
+                            return Err(e);
+                        }
+                    }
                     self.send_error(e).await;
                     continue;
                 }
@@ -216,6 +235,7 @@ impl SocketHandler {
     }
 }
 
+#[derive(Debug)]
 enum ParseError {
     ConnectionClosed,
     BadRequest(anyhow::Error),
@@ -247,6 +267,48 @@ where
     }
 }
 
+async fn consume_leftover(stream: &mut BufReader<UnixStream>) -> Result<(), ParseError> {
+    let remaining = stream.buffer().len();
+    // Check how much data is left in the buffer. If it's greater than 4096 (4kb), something is
+    // probably wrong or the client is misbehaving
+    if remaining > 4096 {
+        error!("Client sent too much data, disconnecting");
+        return Err(ParseError::Error(anyhow::anyhow!(
+            "Aborting connection due to too much garbage data"
+        )));
+    } else if remaining == 0 {
+        // There wasn't any data left in the buffer so just return
+        return Ok(());
+    }
+
+    // We have to read _exactly_ how much data is left in the buffer or we just get 0 bytes read. I
+    // don't quite get why the BufReader would work this way (I figured it would give me what it had
+    // left in the buffer), but I always got 0 bytes read back.
+    let mut buf = vec![0u8; remaining];
+    match tokio::time::timeout(Duration::from_millis(300), stream.read_exact(&mut buf)).await {
+        Ok(Ok(0)) => {
+            trace!("Timed out waiting for leftover data from client");
+            Err(ParseError::ConnectionClosed)
+        }
+        Ok(Ok(n)) if n == remaining => {
+            trace!(len = n, "Read leftover data from client");
+            Ok(())
+        }
+        Ok(Ok(n)) => {
+            // We filled the buffer so just return a shutdown
+            trace!(len = n, "Read leftover data from client");
+            Err(ParseError::Error(anyhow::anyhow!(
+                "Aborting connection due to too much garbage data"
+            )))
+        }
+        Ok(Err(e)) => Err(ParseError::Error(e.into())),
+        Err(_) => {
+            trace!("Timed out waiting for leftover data from client");
+            Ok(())
+        }
+    }
+}
+
 async fn parse_incoming(
     stream: &mut BufReader<UnixStream>,
 ) -> Result<(String, Vec<u8>), ParseError> {
@@ -255,7 +317,8 @@ async fn parse_incoming(
     perform_read(stream.read_exact(&mut buf)).await?;
     if buf != REQUEST_IDENTIFIER {
         return Err(ParseError::BadRequest(anyhow::anyhow!(
-            "Invalid request identifier"
+            "Invalid request identifier: {}",
+            String::from_utf8_lossy(&buf)
         )));
     }
     let mut method = Vec::new();
@@ -345,4 +408,166 @@ async fn parse_incoming(
         )));
     }
     Ok((method, body))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+    struct TestBody {
+        foo: String,
+        bar: u32,
+    }
+
+    #[tokio::test]
+    async fn test_protocol() {
+        let (mut client, server) = UnixStream::pair().unwrap();
+        let mut server = BufReader::new(server);
+
+        // Test a good request first
+        let mut req = REQUEST_IDENTIFIER.to_vec();
+
+        let test_body = TestBody {
+            foo: "hello".to_string(),
+            bar: 123,
+        };
+        req.extend_from_slice("coolmethod\n".as_bytes());
+        let body = serde_json::to_vec(&test_body).unwrap();
+        req.extend(body);
+        req.push(b'\r');
+        req.extend_from_slice(TERMINATOR);
+
+        client.write_all(&req).await.unwrap();
+        let (method, body) = parse_incoming(&mut server)
+            .await
+            .expect("Should be able to parse incoming body");
+        assert_eq!(method, "coolmethod", "Method should be correct");
+        let body: TestBody = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body, test_body, "Body should be correct");
+
+        // Do the same request to make sure it works with a second request
+        client.write_all(&req).await.unwrap();
+        let (method, body) = parse_incoming(&mut server)
+            .await
+            .expect("Should be able to parse incoming body");
+        assert_eq!(method, "coolmethod", "Method should be correct");
+        let body: TestBody = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body, test_body, "Body should be correct");
+
+        // Test closing the connection
+        client.shutdown().await.unwrap();
+        let err = parse_incoming(&mut server)
+            .await
+            .expect_err("Should error with EOF");
+        assert!(
+            matches!(err, ParseError::ConnectionClosed),
+            "Error should be connection closed, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_protocol_bad_requests() {
+        let (mut client, server) = UnixStream::pair().unwrap();
+        let mut server = BufReader::new(server);
+
+        // Write some garbage and make sure we get the right error
+        client.write_all(b"garbage").await.unwrap();
+        let err = parse_incoming(&mut server)
+            .await
+            .expect_err("Should error with garbage request");
+        assert!(
+            matches!(err, ParseError::BadRequest(_)),
+            "Should error with garbage request, got {err:?}"
+        );
+
+        consume_leftover(&mut server)
+            .await
+            .expect("Should be able to clean out extra data");
+
+        // Test an interrupted request
+        client.write_all(REQUEST_IDENTIFIER).await.unwrap();
+        let err = parse_incoming(&mut server)
+            .await
+            .expect_err("Should error with interrupted request");
+        assert!(
+            matches!(err, ParseError::BadRequest(_)),
+            "Should error with interrupted request, got {err:?}",
+        );
+
+        consume_leftover(&mut server)
+            .await
+            .expect("Should be able to clean out extra data");
+
+        // Test interrupted after method
+        client.write_all(REQUEST_IDENTIFIER).await.unwrap();
+        client.write_all(b"coolmethod\n").await.unwrap();
+        let err = parse_incoming(&mut server)
+            .await
+            .expect_err("Should error with interrupted request");
+        assert!(
+            matches!(err, ParseError::BadRequest(_)),
+            "Should error with interrupted request, got {err:?}"
+        );
+
+        consume_leftover(&mut server)
+            .await
+            .expect("Should be able to clean out extra data");
+
+        // Test interrupted after body
+        client.write_all(REQUEST_IDENTIFIER).await.unwrap();
+        client.write_all(b"coolmethod\n").await.unwrap();
+        client
+            .write_all(b"{\"foo\": \"hello\", \"bar\": 123}\r")
+            .await
+            .unwrap();
+        let err = parse_incoming(&mut server)
+            .await
+            .expect_err("Should error with interrupted request");
+        assert!(
+            matches!(err, ParseError::BadRequest(_)),
+            "Should error with interrupted request, got {err:?}"
+        );
+
+        consume_leftover(&mut server)
+            .await
+            .expect("Should be able to clean out extra data");
+
+        // Test garbage terminator
+        client.write_all(REQUEST_IDENTIFIER).await.unwrap();
+        client.write_all(b"coolmethod\n").await.unwrap();
+        client
+            .write_all(b"{\"foo\": \"hello\", \"bar\": 123}\r")
+            .await
+            .unwrap();
+        client.write_all(b"garbage").await.unwrap();
+        let err = parse_incoming(&mut server)
+            .await
+            .expect_err("Should error with garbage terminator");
+        assert!(
+            matches!(err, ParseError::BadRequest(_)),
+            "Should error with garbage terminator, got {err:?}"
+        );
+
+        consume_leftover(&mut server)
+            .await
+            .expect("Should be able to clean out extra data");
+
+        // Test non-string method
+        client.write_all(REQUEST_IDENTIFIER).await.unwrap();
+        client.write_all(&[99, 111, 255]).await.unwrap();
+        client.write_u8(b'\n').await.unwrap();
+        client
+            .write_all(b"{\"foo\": \"hello\", \"bar\": 123}\r")
+            .await
+            .unwrap();
+        client.write_all(TERMINATOR).await.unwrap();
+        let err = parse_incoming(&mut server)
+            .await
+            .expect_err("Should error with non-string method");
+        assert!(
+            matches!(err, ParseError::BadRequest(_)),
+            "Should error with non-string method, got {err:?}"
+        );
+    }
 }

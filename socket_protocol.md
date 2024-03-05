@@ -20,7 +20,7 @@ RES\n<json-data>\r\nEND\n
 
 The server does not make any guarantees about request timeout for partially written requests (i.e. it can wait for any length of time for the rest of a request to be written), but it MUST send a response if it does choose to timeout.
 
-A client MAY keep a connection to the socket open and issue multiple requests over it. The server MUST respond to each request in the order it receives them for that connection.
+A client MAY keep a connection to the socket open and issue multiple requests over it. However, the client MUST NOT write another request until a response is received. The server MUST respond to each request in the order it receives them for that connection.
 
 ## Methods
 
