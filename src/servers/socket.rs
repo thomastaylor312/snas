@@ -14,6 +14,8 @@ use crate::error::HandleError;
 use crate::handlers::Handlers;
 use crate::{REQUEST_IDENTIFIER, RESPONSE_IDENTIFIER, TERMINATOR};
 
+const MISBEHAVING_LIMIT: usize = 2048;
+
 pub struct UserSocket {
     handlers: Handlers,
     socket: UnixListener,
@@ -268,38 +270,44 @@ where
 }
 
 async fn consume_leftover(stream: &mut BufReader<UnixStream>) -> Result<(), ParseError> {
-    let remaining = stream.buffer().len();
-    // Check how much data is left in the buffer. If it's greater than 4096 (4kb), something is
-    // probably wrong or the client is misbehaving
-    if remaining > 4096 {
-        error!("Client sent too much data, disconnecting");
+    // HACK ALERT: For some reason, when we are cleaning up data, particularly large amounts of
+    // garbage data, the buffer on the buf reader will not fill. Don't ask me why. So what we do
+    // instead is we manually consume all of the buffer, returning the amount of data we consumed.
+    // Then we read as much data as possible _directly_ from the socket (see a little further down).
+    // This should ensure that the buffer is empty, the socket is empty, and we can continue.
+    let total_read = if !stream.buffer().is_empty() {
+        let consumed = stream.buffer().len();
+        // Consume the entire buffer
+        stream.consume(consumed);
+        consumed
+    } else {
+        0
+    };
+    if total_read >= MISBEHAVING_LIMIT {
+        // We hit our limit so return without reading anything else
         return Err(ParseError::Error(anyhow::anyhow!(
             "Aborting connection due to too much garbage data"
         )));
-    } else if remaining == 0 {
-        // There wasn't any data left in the buffer so just return
-        return Ok(());
     }
-
-    // We have to read _exactly_ how much data is left in the buffer or we just get 0 bytes read. I
-    // don't quite get why the BufReader would work this way (I figured it would give me what it had
-    // left in the buffer), but I always got 0 bytes read back.
+    // Check how much data is left in the buffer. If it's greater than 2048 (2kb) including the
+    // amount we consumed from the buffer, something is probably wrong or the client is misbehaving
+    let remaining = MISBEHAVING_LIMIT - total_read;
     let mut buf = vec![0u8; remaining];
-    match tokio::time::timeout(Duration::from_millis(300), stream.read_exact(&mut buf)).await {
+    match tokio::time::timeout(Duration::from_millis(300), stream.get_mut().read(&mut buf)).await {
         Ok(Ok(0)) => {
             trace!("Timed out waiting for leftover data from client");
             Err(ParseError::ConnectionClosed)
         }
         Ok(Ok(n)) if n == remaining => {
-            trace!(len = n, "Read leftover data from client");
-            Ok(())
-        }
-        Ok(Ok(n)) => {
             // We filled the buffer so just return a shutdown
-            trace!(len = n, "Read leftover data from client");
             Err(ParseError::Error(anyhow::anyhow!(
                 "Aborting connection due to too much garbage data"
             )))
+        }
+        Ok(Ok(n)) => {
+            // We cleared out the rest of the data, so we can return
+            trace!(len = n, "Read leftover data from client");
+            Ok(())
         }
         Ok(Err(e)) => Err(ParseError::Error(e.into())),
         Err(_) => {
@@ -553,6 +561,20 @@ mod test {
             .await
             .expect("Should be able to clean out extra data");
 
+        // Just for safety sake, let's do a valid request and make sure it can read it properly
+
+        client.write_all(REQUEST_IDENTIFIER).await.unwrap();
+        client.write_all(b"coolmethod\n").await.unwrap();
+        client
+            .write_all(b"{\"foo\": \"hello\", \"bar\": 123}\r")
+            .await
+            .unwrap();
+        client.write_all(TERMINATOR).await.unwrap();
+        let (method, _) = parse_incoming(&mut server)
+            .await
+            .expect("Should be able to handle subsequent valid request");
+        assert_eq!(method, "coolmethod", "Method should be correct");
+
         // Test non-string method
         client.write_all(REQUEST_IDENTIFIER).await.unwrap();
         client.write_all(&[99, 111, 255]).await.unwrap();
@@ -569,5 +591,19 @@ mod test {
             matches!(err, ParseError::BadRequest(_)),
             "Should error with non-string method, got {err:?}"
         );
+
+        // Create a vec of 3000 random bytes to make sure we error on too much data
+        let mut body = Vec::new();
+        body.resize(3000, 12u8);
+
+        client.write_all(&body).await.unwrap();
+
+        let err = consume_leftover(&mut server)
+            .await
+            .expect_err("Should error on consume leftover with too much data");
+        assert!(
+            matches!(err, ParseError::Error(_)),
+            "Should error with the correct type, got {err:?}"
+        )
     }
 }
