@@ -12,6 +12,8 @@ mod nats;
 mod socket;
 
 pub use nats::NatsClient;
+#[cfg(unix)]
+pub use socket::SocketClient;
 
 /// A super trait for a type that implements both the [`AdminClient`] and [`UserClient`] traits.
 /// This is auto-implemented for any type that implements both.
