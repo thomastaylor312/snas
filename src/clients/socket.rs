@@ -1,13 +1,16 @@
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use anyhow::Context;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Interest};
 use tokio::net::UnixStream;
 use tokio::sync::Mutex;
 use tracing::{instrument, trace};
 
-use crate::api::{PasswordChangeRequest, VerificationRequest, VerificationResponse};
+use crate::api::{
+    GenericResponse, PasswordChangeRequest, VerificationRequest, VerificationResponse,
+};
 use crate::clients::UserClient;
 use crate::{SecureString, REQUEST_IDENTIFIER, RESPONSE_IDENTIFIER, TERMINATOR};
 
@@ -19,16 +22,19 @@ use crate::{SecureString, REQUEST_IDENTIFIER, RESPONSE_IDENTIFIER, TERMINATOR};
 pub struct SocketClient {
     // This needs to be in a mutex to properly implement the `UserClient` trait which doesn't have
     // the ability to do a `mut self`
+    //
+    // NOTE: There isn't a way to call shutdown on cleanup as it is async. So this isn't a great
+    // cleanup when it is automatically dropped
     socket: Mutex<tokio::net::UnixStream>,
     socket_path: PathBuf,
 }
 
 impl SocketClient {
     /// Creates a new socket client from a socket path
-    pub async fn new(socket_path: PathBuf) -> anyhow::Result<Self> {
+    pub async fn new(socket_path: impl AsRef<Path>) -> anyhow::Result<Self> {
         Ok(Self {
             socket: Mutex::new(UnixStream::connect(&socket_path).await?),
-            socket_path,
+            socket_path: socket_path.as_ref().to_owned(),
         })
     }
 
@@ -41,12 +47,18 @@ impl SocketClient {
         })
     }
 
+    /// Cleanly shutdown the socket. This is necessary because there is no async drop yet.
+    pub async fn shutdown(self) -> anyhow::Result<()> {
+        let mut socket = self.socket.into_inner();
+        socket.shutdown().await.map_err(Into::into)
+    }
+
     #[instrument(level = "debug", skip(self, data))]
     async fn send_request<Req: Serialize, Resp: DeserializeOwned>(
         &self,
         method: &str,
         data: Req,
-    ) -> anyhow::Result<Resp> {
+    ) -> anyhow::Result<GenericResponse<Resp>> {
         let mut buf = Vec::new();
         buf.extend_from_slice(REQUEST_IDENTIFIER);
         buf.extend_from_slice(method.as_bytes());
@@ -57,14 +69,16 @@ impl SocketClient {
 
         trace!(len = %buf.len(), "Sending request");
         let mut socket = self.socket.lock().await;
+
         socket.write_all(&buf).await?;
+        socket.flush().await?;
 
         let data = parse_response(&mut socket).await?;
 
         serde_json::from_slice(&data).map_err(Into::into)
     }
 
-    /// Helper that reconnects the client if the connection is closed
+    /// Helper that reconnects the client if the connection is closed (only for write)
     async fn reconnect(&self) -> anyhow::Result<()> {
         let mut socket = self.socket.lock().await;
         let can_write = match socket.ready(Interest::WRITABLE).await {
@@ -100,50 +114,10 @@ impl SocketClient {
                 return Err(e.into());
             }
         };
-        // Short circuit here if we have to reconnect
         if !can_write {
             *socket = UnixStream::connect(&self.socket_path).await?;
-            return Ok(());
         }
 
-        // This match block is just oh-so-slightly different, so we have to copy/paste
-        let can_read = match socket.ready(Interest::READABLE).await {
-            Ok(ready) if ready.is_readable() => true,
-            Ok(ready) if ready.is_read_closed() => {
-                trace!("Socket is read closed, reconnecting");
-                false
-            }
-            // Any other ready state shouldn't occur
-            Ok(ready) => {
-                trace!(
-                    "Socket is in an unexpected ready state: {:?}, reconnecting",
-                    ready
-                );
-                false
-            }
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    ErrorKind::ConnectionReset
-                        | ErrorKind::BrokenPipe
-                        | ErrorKind::NotConnected
-                        | ErrorKind::UnexpectedEof
-                        | ErrorKind::ConnectionAborted
-                        | ErrorKind::Interrupted
-                        | ErrorKind::TimedOut,
-                ) =>
-            {
-                trace!(err = %e, "Socket connection errored, reconnecting");
-                false
-            }
-            Err(e) => {
-                return Err(e.into());
-            }
-        };
-
-        if !can_read {
-            *socket = UnixStream::connect(&self.socket_path).await?;
-        }
         Ok(())
     }
 }
@@ -155,14 +129,17 @@ impl UserClient for SocketClient {
         password: SecureString,
     ) -> anyhow::Result<VerificationResponse> {
         self.reconnect().await?;
-        self.send_request(
-            "verify",
-            VerificationRequest {
-                username: username.to_owned(),
-                password,
-            },
-        )
-        .await
+        let resp = self
+            .send_request(
+                "verify",
+                VerificationRequest {
+                    username: username.to_owned(),
+                    password,
+                },
+            )
+            .await?;
+        resp.into_result_required()
+            .context("Error while verifying user")
     }
 
     async fn change_password(
@@ -172,15 +149,18 @@ impl UserClient for SocketClient {
         new_password: SecureString,
     ) -> anyhow::Result<()> {
         self.reconnect().await?;
-        self.send_request(
-            "change_password",
-            PasswordChangeRequest {
-                username: username.to_owned(),
-                old_password,
-                new_password,
-            },
-        )
-        .await
+        let resp = self
+            .send_request(
+                "change_password",
+                PasswordChangeRequest {
+                    username: username.to_owned(),
+                    old_password,
+                    new_password,
+                },
+            )
+            .await?;
+        resp.into_result_empty()
+            .context("Error while changing password")
     }
 }
 

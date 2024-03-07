@@ -16,12 +16,12 @@ use crate::{REQUEST_IDENTIFIER, RESPONSE_IDENTIFIER, TERMINATOR};
 
 const MISBEHAVING_LIMIT: usize = 2048;
 
-pub struct UserSocket {
+pub struct SocketUserServer {
     handlers: Handlers,
     socket: UnixListener,
 }
 
-impl UserSocket {
+impl SocketUserServer {
     pub async fn new(handlers: Handlers, socket_path: impl AsRef<Path>) -> anyhow::Result<Self> {
         Ok(Self {
             handlers,
@@ -135,6 +135,7 @@ impl SocketHandler {
             error!(err = %e, "Error serializing error response");
             return;
         };
+        data.push(b'\r');
         data.extend_from_slice(TERMINATOR);
         if let Err(e) = self.stream.write_all(&data).await {
             error!(err = %e, "Error sending error response");
@@ -149,6 +150,7 @@ impl SocketHandler {
             error!(err = %e, "Error serializing response");
             return;
         };
+        data.push(b'\r');
         data.extend_from_slice(TERMINATOR);
         if let Err(e) = self.stream.write_all(&data).await {
             error!(err = %e, "Error sending response");
