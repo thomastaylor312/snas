@@ -1,0 +1,41 @@
+name: Build and test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      # You still can't pass arguments to service containers, so we just download NATS like a caveman
+      - name: Install NATS
+        run: |
+          curl -L https://github.com/nats-io/nats-server/releases/download/v2.10.11/nats-server-v2.10.11-linux-amd64.zip -o nats-server.zip
+          unzip nats-server.zip -d nats-server
+  
+      - name: Run NATS with options
+        run: ./nats-server/nats-server-v2.10.11-linux-amd64/nats-server -js &
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: "true"
+      - name: Run rustfmt check
+        run: cargo fmt --all --check
+      - name: Run clippy check
+        run: cargo clippy -- -D warnings
+      - name: Run unit tests
+        run: cargo test
+      - name: Run integration and e2e tests
+        run: cargo test --tests
+      
+                               
