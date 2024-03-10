@@ -46,6 +46,7 @@ impl PamHooks for PamSocket {
                 let password: SecureString = password.into();
 
                 match runtime.block_on(client.verify(&user, password)) {
+                    // TODO: Maybe use set_item to store a group list?
                     Ok(res) if res.valid => PamResultCode::PAM_SUCCESS,
                     Ok(_res) => PamResultCode::PAM_AUTH_ERR,
                     Err(err) => {
@@ -60,12 +61,16 @@ impl PamHooks for PamSocket {
 
     fn sm_setcred(_pamh: &mut PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
         println!("Set credentials.");
+        // I think when we this is called, we create any missing groups and then assign them as well as creating a home directory if needed. When called with close we should delete groups but not the directory
         PamResultCode::PAM_SUCCESS
     }
 
     fn acct_mgmt(_pamh: &mut PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
         println!("Account management.");
         PamResultCode::PAM_SUCCESS
+    }
+    fn sm_chauthtok(_pamh: &mut PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
+        todo!("Implement change password")
     }
 }
 
