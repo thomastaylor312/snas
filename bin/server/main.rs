@@ -1,13 +1,20 @@
 use std::{io::IsTerminal, path::PathBuf};
 
-use async_nats::jetstream::{kv::Config, stream::StorageType};
+use anyhow::Context;
+use async_nats::{
+    jetstream::{kv::Config, stream::StorageType},
+    ConnectOptions,
+};
 use clap::Parser;
 use futures::future::{pending, Either};
 use tracing::error;
 
 use snas::{
     handlers::Handlers,
-    servers::nats::{admin::NatsAdminServer, user::NatsUserServer},
+    servers::{
+        nats::{admin::NatsAdminServer, user::NatsUserServer},
+        socket::SocketUserServer,
+    },
     storage::CredStore,
 };
 
@@ -30,26 +37,36 @@ struct Args {
     #[arg(short = 'b', default_value = "snas", env = "SNAS_KV_BUCKET")]
     kv_bucket: String,
 
-    // TODO: NATS creds
-    /// The admin password to use by default. If this admin user already exists, it will not
-    /// overwrite the current admin password
+    /// The creds file to use for authenticating to NATS. This is the preferred option
+    #[arg(id = "creds", short = 'c', long = "creds", env = "SNAS_NATS_CREDS", conflicts_with_all = ["username", "password"])]
+    creds: Option<PathBuf>,
+
+    /// The username to use to authenticate with NATS. Using this option also requires the
+    /// `--password` flag and is mutually exclusive with the `--creds` flag
     #[arg(
+        id = "username",
+        long = "username",
+        env = "SNAS_NATS_USER",
+        requires = "password",
+        conflicts_with = "creds"
+    )]
+    nats_username: Option<String>,
+
+    /// The password to use to authenticate with NATS. Using this option also requires the
+    /// `--username` flag and is mutually exclusive with `--creds`
+    #[arg(
+        id = "password",
         long = "password",
-        default_value = "admin",
-        env = "SNAS_ADMIN_PASSWORD"
+        env = "SNAS_NATS_PASSWORD",
+        requires = "username",
+        conflicts_with = "creds"
     )]
-    admin_password: String,
+    nats_password: Option<String>,
 
-    // TODO: TLS
-
-    // TODO: Swap this out for an actual parsed IP address
-    /// The address and port to listen on for HTTP connections
-    #[arg(
-        short = 'l',
-        default_value = "0.0.0.0:8080",
-        env = "SNAS_LISTEN_ADDRESS"
-    )]
-    listen_address: String,
+    /// A path to a Certificate Authority certificate for cases when you are using an internal
+    /// signing authority
+    #[arg(long = "ca-cert", env = "SNAS_NATS_CA_CERT")]
+    nats_ca_cert: Option<PathBuf>,
 
     // TODO: Do we need some sort of domain/realm thing so we can support multiple groups of users
     // in the future?
@@ -106,26 +123,9 @@ struct Args {
         id = "socket_file",
         long = "socket-file",
         env = "SNAS_SOCKET_FILE",
-        required_unless_present_any = ["admin_socket_file", "admin_nats", "user_nats"],
+        required_unless_present_any = ["admin_nats", "user_nats"],
     )]
-    socket_file: PathBuf,
-
-    /// The default user to create if one does not already exist. This user will be created with
-    /// the password specified by the `--password` flag
-    #[arg(
-        long = "default-user",
-        default_value = "snas",
-        env = "SNAS_DEFAULT_USER"
-    )]
-    default_user: String,
-
-    /// The default groups to give to new users, given as a comma delimited list
-    #[arg(
-        long = "default-groups",
-        use_value_delimiter = true,
-        env = "SNAS_DEFAULT_GROUPS"
-    )]
-    default_groups: Option<Vec<String>>,
+    socket_file: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -141,7 +141,14 @@ async fn main() -> anyhow::Result<()> {
         builder.pretty().init();
     }
 
-    let client = async_nats::connect(format!("{}:{}", args.nats_server, args.nats_port)).await?;
+    let client = get_nats_client(
+        format!("{}:{}", args.nats_server, args.nats_port),
+        args.creds,
+        args.nats_username,
+        args.nats_password,
+        args.nats_ca_cert,
+    )
+    .await?;
     tracing::info!("Successfully connected to NATS server");
     let js = if let Some(domain) = args.js_domain {
         async_nats::jetstream::with_domain(client.clone(), domain)
@@ -198,9 +205,48 @@ async fn main() -> anyhow::Result<()> {
         Either::Right(pending::<anyhow::Result<()>>())
     };
 
-    if let Err(err) = futures::try_join!(nats_user_server, nats_admin_server,) {
+    let socket_server = if let Some(socket_file) = args.socket_file {
+        Either::Left(
+            SocketUserServer::new(handlers.clone(), socket_file)
+                .await?
+                .run(),
+        )
+    } else {
+        Either::Right(pending::<anyhow::Result<()>>())
+    };
+
+    if let Err(err) = futures::try_join!(nats_user_server, nats_admin_server, socket_server) {
         error!(%err, "An error occurred, shutting down");
         return Err(err);
     }
     Ok(())
+}
+
+async fn get_nats_client(
+    nats_addr: String,
+    creds: Option<PathBuf>,
+    username: Option<String>,
+    password: Option<String>,
+    ca_cert: Option<PathBuf>,
+) -> anyhow::Result<async_nats::Client> {
+    let mut opts = ConnectOptions::new();
+    if let Some(cert) = ca_cert {
+        opts = opts.add_root_certificates(cert)
+    }
+
+    // We don't need to check if multiple creds are set as the CLI validates that for us
+    if let Some(creds_file) = creds {
+        opts = opts
+            .credentials_file(creds_file)
+            .await
+            .context("Unable to open credentials file")?;
+    } else if let (Some(user), Some(pass)) = (username, password) {
+        // Same thing here around validating that both username and password are set. No need to
+        // error as the CLI checks that both are set
+        opts = opts.user_and_password(user, pass);
+    }
+
+    opts.connect(nats_addr)
+        .await
+        .context("Unable to connect to NATS")
 }
