@@ -1,0 +1,16 @@
+[package]
+name = "pam-nats"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "snas_pam_nats"
+crate-type = ["cdylib"]
+
+[dependencies]
+pam-bindings = "0.1"
+snas = { version = "0.1.0", path = "../../" }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

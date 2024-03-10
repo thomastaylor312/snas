@@ -12,6 +12,8 @@ pub(crate) const DEFAULT_USER_NATS_SUBJECT_PREFIX: &str = "snas.user";
 pub(crate) const REQUEST_IDENTIFIER: &[u8] = "REQ\n".as_bytes();
 pub(crate) const RESPONSE_IDENTIFIER: &[u8] = "RES\n".as_bytes();
 pub(crate) const TERMINATOR: &[u8] = "\nEND\n".as_bytes();
+#[cfg(unix)]
+pub const DEFAULT_SOCKET_PATH: &str = "/var/run/snas/user.sock";
 
 pub(crate) fn sanitize_topic_prefix(
     prefix: Option<String>,

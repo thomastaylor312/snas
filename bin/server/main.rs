@@ -16,6 +16,7 @@ use snas::{
         socket::SocketUserServer,
     },
     storage::CredStore,
+    DEFAULT_SOCKET_PATH,
 };
 
 #[derive(Parser, Debug)]
@@ -114,18 +115,27 @@ struct Args {
     )]
     user_nats_topic_prefix: Option<String>,
 
+    /// Whether or not to enable the user socket. This is required if the admin and user NATS
+    /// servers are not enabled
+    #[cfg(unix)]
+    #[arg(
+        long = "user-socket",
+        env = "SNAS_USER_SOCKEt",
+        default_value = DEFAULT_SOCKET_PATH,
+        required_unless_present_any = ["admin_nats", "user_nats"],
+    )]
+    user_socket: bool,
     /// The path to the socket file to use for the user API. This should exist in a directory that
     /// is only accessible to root or other super admins so as to not be abused
     // TODO(thomastaylor312): Use named pipes on Windows instead as UDS support isn't in the
     // standard library or Tokio yet (and it might take a bit)
     #[cfg(unix)]
     #[arg(
-        id = "socket_file",
         long = "socket-file",
         env = "SNAS_SOCKET_FILE",
-        required_unless_present_any = ["admin_nats", "user_nats"],
+        default_value = DEFAULT_SOCKET_PATH,
     )]
-    socket_file: Option<PathBuf>,
+    socket_file: PathBuf,
 }
 
 #[tokio::main]
@@ -205,9 +215,9 @@ async fn main() -> anyhow::Result<()> {
         Either::Right(pending::<anyhow::Result<()>>())
     };
 
-    let socket_server = if let Some(socket_file) = args.socket_file {
+    let socket_server = if args.user_socket {
         Either::Left(
-            SocketUserServer::new(handlers.clone(), socket_file)
+            SocketUserServer::new(handlers.clone(), args.socket_file)
                 .await?
                 .run(),
         )
