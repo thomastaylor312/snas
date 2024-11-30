@@ -16,7 +16,7 @@ rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
 serde_json = "1"
-thiserror = "1"
+thiserror = "2"
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -29,12 +29,12 @@ members = ["crates/*"]
 
 [workspace.dependencies]
 anyhow = "1"
-async-nats = "0.34"
-# 0.3.30 has a weird missing crate issue
-futures = "=0.3.29"
+async-nats = "0.38"
+futures = "0.3"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "ansi"] }
+pam-bindings = "0.1"
 
 [[bin]]
 name = "snas-server"

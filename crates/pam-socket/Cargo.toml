@@ -8,7 +8,7 @@ name = "snas_pam_socket"
 crate-type = ["cdylib"]
 
 [dependencies]
-pam-bindings = "0.1"
+pam-bindings = { workspace = true }
 snas = { version = "0.1.0", path = "../../" }
 anyhow = { workspace = true }
 tokio = { workspace = true }

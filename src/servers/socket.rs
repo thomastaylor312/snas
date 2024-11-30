@@ -7,6 +7,7 @@ use tokio::time::error::Elapsed;
 use tokio::time::Duration;
 use tracing::{error, instrument, trace, warn};
 
+use crate::admin::UserGetRequest;
 use crate::api::{
     GenericResponse, PasswordChangeRequest, VerificationRequest, VerificationResponse,
 };
@@ -117,6 +118,9 @@ impl SocketHandler {
                 }
                 "change_password" => {
                     self.handle_change_password(body).await;
+                }
+                "get_user" => {
+                    self.handle_get_user(body).await;
                 }
                 _ => {
                     self.send_error(format!("Unknown method {method}")).await;
@@ -234,6 +238,31 @@ impl SocketHandler {
             Err(err) => {
                 self.send_error(format!("password change failed: {}", err))
                     .await;
+            }
+        }
+    }
+
+    async fn handle_get_user(&mut self, data: Vec<u8>) {
+        let req: UserGetRequest = match serde_json::from_slice(&data) {
+            Ok(r) => r,
+            Err(e) => {
+                self.send_error(format!("Error parsing user get request: {}", e))
+                    .await;
+                return;
+            }
+        };
+
+        match self.handlers.get(&req.username).await {
+            Ok(user) => {
+                self.send_response(GenericResponse {
+                    success: true,
+                    message: "User found".to_string(),
+                    response: Some(user),
+                })
+                .await;
+            }
+            Err(err) => {
+                self.send_error(format!("User not found: {}", err)).await;
             }
         }
     }

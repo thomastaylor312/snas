@@ -21,7 +21,15 @@ pub trait SnasClient: AdminClient + UserClient {}
 
 impl<T> SnasClient for T where T: AdminClient + UserClient {}
 
-pub trait AdminClient {
+/// A trait for any client that can fetch a user. This mostly exists to allow the PAM modules to be
+/// able to fetch a user but not have full access to the admin API.
+pub trait GetUserClient {
+    /// Get the user with the given username. Returns an error if the user does not exist.
+    fn get_user(&self, username: &str)
+        -> impl Future<Output = anyhow::Result<UserResponse>> + Send;
+}
+
+pub trait AdminClient: GetUserClient {
     /// Create a new user with the given username and password. Returns an error if the user already
     /// exists.
     fn add_user(
@@ -31,10 +39,6 @@ pub trait AdminClient {
         groups: BTreeSet<String>,
         force_password_change: bool,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
-
-    /// Get the user with the given username. Returns an error if the user does not exist.
-    fn get_user(&self, username: &str)
-        -> impl Future<Output = anyhow::Result<UserResponse>> + Send;
 
     /// List all usernames.
     fn list_users(&self) -> impl Future<Output = anyhow::Result<Vec<String>>> + Send;

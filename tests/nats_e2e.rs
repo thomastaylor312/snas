@@ -60,7 +60,7 @@ async fn test_admin_api() {
     )
     .unwrap();
 
-    use snas::clients::AdminClient;
+    use snas::clients::{AdminClient, GetUserClient};
 
     admin_client
         .add_user("foo", "easy123".into(), ["foo".into()].into(), false)
@@ -224,7 +224,7 @@ async fn test_password_reset_flow() {
     )
     .unwrap();
 
-    use snas::clients::{AdminClient, UserClient};
+    use snas::clients::{AdminClient, GetUserClient, UserClient};
 
     // Add a user for the test
     client

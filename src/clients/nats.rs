@@ -51,7 +51,7 @@ impl NatsClient {
         })
     }
 
-    async fn do_request<T: Serialize, R: DeserializeOwned>(
+    async fn do_request<T: Serialize, R: DeserializeOwned + 'static>(
         &self,
         subject: String,
         body: &T,
@@ -97,6 +97,18 @@ impl super::UserClient for NatsClient {
     }
 }
 
+impl super::GetUserClient for NatsClient {
+    async fn get_user(&self, username: &str) -> anyhow::Result<UserResponse> {
+        let subject = format!("{}.get_user", self.admin_topic_prefix);
+        let payload = UserGetRequest {
+            username: username.to_string(),
+        };
+        let resp: GenericResponse<UserResponse> = self.do_request(subject, &payload).await?;
+        resp.into_result_required()
+            .context("Error while getting user")
+    }
+}
+
 impl super::AdminClient for NatsClient {
     async fn add_user(
         &self,
@@ -114,16 +126,6 @@ impl super::AdminClient for NatsClient {
         };
         let resp: GenericResponse<()> = self.do_request(subject, &payload).await?;
         resp.into_result_empty().context("Error while adding user")
-    }
-
-    async fn get_user(&self, username: &str) -> anyhow::Result<UserResponse> {
-        let subject = format!("{}.get_user", self.admin_topic_prefix);
-        let payload = UserGetRequest {
-            username: username.to_string(),
-        };
-        let resp: GenericResponse<UserResponse> = self.do_request(subject, &payload).await?;
-        resp.into_result_required()
-            .context("Error while getting user")
     }
 
     async fn list_users(&self) -> anyhow::Result<Vec<String>> {

@@ -54,7 +54,7 @@ impl SocketClient {
     }
 
     #[instrument(level = "debug", skip(self, data))]
-    async fn send_request<Req: Serialize, Resp: DeserializeOwned>(
+    async fn send_request<Req: Serialize, Resp: DeserializeOwned + 'static>(
         &self,
         method: &str,
         data: Req,

@@ -59,8 +59,20 @@ impl PamHooks for PamSocket {
         }
     }
 
-    fn sm_setcred(_pamh: &mut PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
-        println!("Set credentials.");
+    fn sm_setcred(pamh: &mut PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
+        tracing::debug!("beginning set credentials");
+        let (runtime, client) = RUNTIME.get_or_init(initialize_runtime);
+
+        let user = match pamh.get_user(None) {
+            Ok(u) => u,
+            Err(err_code) => {
+                error!(?err_code, "Could not get user");
+                return err_code;
+            }
+        };
+
+        // TODO: Get the user, then make sure the homedir exists and the groups exist
+
         // I think when we this is called, we create any missing groups and then assign them as well as creating a home directory if needed. When called with close we should delete groups but not the directory
         PamResultCode::PAM_SUCCESS
     }
