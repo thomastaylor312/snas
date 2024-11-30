@@ -1,4 +1,4 @@
-use snas::{storage::CredStore, UserInfo};
+use snas_lib::{storage::CredStore, UserInfo};
 
 pub mod helpers;
 

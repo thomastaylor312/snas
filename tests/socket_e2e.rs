@@ -1,4 +1,4 @@
-use snas::clients::SocketClient;
+use snas_lib::clients::SocketClient;
 
 pub mod helpers;
 

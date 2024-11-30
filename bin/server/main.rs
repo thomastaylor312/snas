@@ -9,7 +9,7 @@ use clap::Parser;
 use futures::future::{pending, Either};
 use tracing::error;
 
-use snas::{
+use snas_lib::{
     handlers::Handlers,
     servers::{
         nats::{admin::NatsAdminServer, user::NatsUserServer},

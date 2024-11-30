@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pam-bindings = { workspace = true }
-snas = { version = "0.1.0", path = "../../" }
+snas-lib = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

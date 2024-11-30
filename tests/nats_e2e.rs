@@ -2,8 +2,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures::future::Either;
 use futures::FutureExt;
-use snas::clients::NatsClient;
-use snas::{PasswordResetPhase, UserInfo};
+use snas_lib::clients::NatsClient;
+use snas_lib::{PasswordResetPhase, UserInfo};
 
 pub mod helpers;
 
@@ -13,7 +13,7 @@ async fn test_user_api() {
         .with_writer(std::io::stderr)
         .try_init();
     let bundle = helpers::TestBundle::new("user_api", |client, handlers| async move {
-        let user_api = snas::servers::nats::user::NatsUserServer::new(
+        let user_api = snas_lib::servers::nats::user::NatsUserServer::new(
             handlers,
             client,
             Some("test.user.api".to_string()),
@@ -41,7 +41,7 @@ async fn test_admin_api() {
         .with_writer(std::io::stderr)
         .try_init();
     let bundle = helpers::TestBundle::new("admin_api", |client, handlers| async move {
-        let admin_api = snas::servers::nats::admin::NatsAdminServer::new(
+        let admin_api = snas_lib::servers::nats::admin::NatsAdminServer::new(
             handlers,
             client,
             Some("test.admin.api".to_string()),
@@ -60,7 +60,7 @@ async fn test_admin_api() {
     )
     .unwrap();
 
-    use snas::clients::{AdminClient, GetUserClient};
+    use snas_lib::clients::{AdminClient, GetUserClient};
 
     admin_client
         .add_user("foo", "easy123".into(), ["foo".into()].into(), false)
@@ -193,14 +193,14 @@ async fn test_password_reset_flow() {
         .with_writer(std::io::stderr)
         .try_init();
     let bundle = helpers::TestBundle::new("password_reset_flow", |client, handlers| async move {
-        let admin_api = snas::servers::nats::admin::NatsAdminServer::new(
+        let admin_api = snas_lib::servers::nats::admin::NatsAdminServer::new(
             handlers.clone(),
             client.clone(),
             Some("test.admin.password".to_string()),
         )
         .await
         .expect("Should be able to initialize a admin server");
-        let user_api = snas::servers::nats::user::NatsUserServer::new(
+        let user_api = snas_lib::servers::nats::user::NatsUserServer::new(
             handlers,
             client,
             Some("test.user.password".to_string()),
@@ -224,7 +224,7 @@ async fn test_password_reset_flow() {
     )
     .unwrap();
 
-    use snas::clients::{AdminClient, GetUserClient, UserClient};
+    use snas_lib::clients::{AdminClient, GetUserClient, UserClient};
 
     // Add a user for the test
     client

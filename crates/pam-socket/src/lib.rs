@@ -5,8 +5,8 @@ use pam::constants::{PamFlag, PamResultCode, PAM_PROMPT_ECHO_OFF};
 use pam::conv::Conv;
 use pam::module::{PamHandle, PamHooks};
 use pam::pam_try;
-use snas::clients::{SocketClient, UserClient};
-use snas::{SecureString, DEFAULT_SOCKET_PATH};
+use snas_lib::clients::{SocketClient, UserClient};
+use snas_lib::{SecureString, DEFAULT_SOCKET_PATH};
 use tokio::runtime::Runtime;
 use tracing::error;
 

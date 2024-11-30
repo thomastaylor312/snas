@@ -904,7 +904,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "pam-bindings",
- "snas",
+ "snas-lib",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -916,7 +916,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "pam-bindings",
- "snas",
+ "snas-lib",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1429,6 +1429,22 @@ name = "snas"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-nats",
+ "bincode",
+ "clap",
+ "futures",
+ "snas-lib",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "snas-lib"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "argon2",
  "async-nats",
  "bincode",
@@ -1438,7 +1454,6 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "tempfile",
  "thiserror 2.0.3",
  "tokio",
  "tracing",

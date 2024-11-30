@@ -1,8 +1,8 @@
 use std::future::Future;
 
 use async_nats::jetstream::kv::{Config, Store};
-use snas::storage::CredStore;
-use snas::types::admin::UserAddRequest;
+use snas_lib::storage::CredStore;
+use snas_lib::types::admin::UserAddRequest;
 use tokio::task::JoinHandle;
 
 /// Creates a new KV bucket for testing suffixed with the given name. This will first attempt to
@@ -53,7 +53,7 @@ pub struct TestBundle {
     pub client: async_nats::Client,
     pub store: async_nats::jetstream::kv::Store,
     pub handle: JoinHandle<anyhow::Result<()>>,
-    pub handlers: snas::handlers::Handlers,
+    pub handlers: snas_lib::handlers::Handlers,
 }
 
 impl Drop for TestBundle {
@@ -65,7 +65,7 @@ impl Drop for TestBundle {
 impl TestBundle {
     pub async fn new<F, Fut>(test_name: &str, constructor: F) -> Self
     where
-        F: FnOnce(async_nats::Client, snas::handlers::Handlers) -> Fut,
+        F: FnOnce(async_nats::Client, snas_lib::handlers::Handlers) -> Fut,
         Fut: Future<Output = anyhow::Result<()>> + Send + 'static,
     {
         let client = get_client().await;
@@ -73,7 +73,7 @@ impl TestBundle {
         let store = CredStore::new(nats_store.clone())
             .await
             .expect("Should have been able to initialize a CredStore");
-        let handlers = snas::handlers::Handlers::new(store);
+        let handlers = snas_lib::handlers::Handlers::new(store);
         let fut = constructor(client.clone(), handlers.clone());
         let handle = tokio::spawn(fut);
         // Give things a sec to put their pants on
@@ -89,7 +89,7 @@ impl TestBundle {
 
 pub struct TestSocketBundle {
     pub handle: JoinHandle<anyhow::Result<()>>,
-    pub handlers: snas::handlers::Handlers,
+    pub handlers: snas_lib::handlers::Handlers,
     pub socket_path: std::path::PathBuf,
     _temp_dir: tempfile::TempDir,
 }
@@ -107,12 +107,13 @@ impl TestSocketBundle {
         let store = CredStore::new(nats_store.clone())
             .await
             .expect("Should have been able to initialize a CredStore");
-        let handlers = snas::handlers::Handlers::new(store);
+        let handlers = snas_lib::handlers::Handlers::new(store);
         let temp_dir = tempfile::tempdir().expect("Unable to create temp dir");
         let socket_path = temp_dir.path().join(test_name);
-        let server = snas::servers::socket::SocketUserServer::new(handlers.clone(), &socket_path)
-            .await
-            .expect("Unable to create socket");
+        let server =
+            snas_lib::servers::socket::SocketUserServer::new(handlers.clone(), &socket_path)
+                .await
+                .expect("Unable to create socket");
         let handle = tokio::spawn(server.run());
         // Give things a sec to put their pants on
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -125,9 +126,9 @@ impl TestSocketBundle {
     }
 }
 
-pub async fn assert_user_server<T: snas::clients::UserClient>(
+pub async fn assert_user_server<T: snas_lib::clients::UserClient>(
     user_client: T,
-    handlers: &snas::handlers::Handlers,
+    handlers: &snas_lib::handlers::Handlers,
 ) {
     // Create a test user with the handlers before testing the user API
     let user_req = UserAddRequest {
