@@ -2,7 +2,7 @@
   description = "Build a cargo workspace";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/24.11-beta";
+    nixpkgs.url = "github:NixOS/nixpkgs/release-24.11";
 
     crane.url = "github:ipetkov/crane";
 
@@ -12,7 +12,7 @@
       inputs.rust-analyzer-src.follows = "";
     };
 
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1.102";
 
     advisory-db = {
       url = "github:rustsec/advisory-db";
