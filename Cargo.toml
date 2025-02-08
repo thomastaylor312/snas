@@ -29,6 +29,7 @@ async-nats = "0.38"
 bincode = "2.0.0-rc.3"
 clap = { version = "4", features = ["derive", "env"] }
 futures = "0.3"
+libc = "0.2"
 pam-bindings = "0.1"
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }

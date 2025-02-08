@@ -8,9 +8,10 @@ name = "snas_pam_socket"
 crate-type = ["cdylib"]
 
 [dependencies]
+anyhow = { workspace = true }
+libc = { workspace = true }
 pam-bindings = { workspace = true }
 snas-lib = { workspace = true }
-anyhow = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
