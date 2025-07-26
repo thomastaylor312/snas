@@ -1,0 +1,45 @@
+name: PAM E2E Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  pam-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo directories
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zig libpam0g-dev pkg-config libssl-dev
+
+      - name: Install cargo-zigbuild
+        run: cargo install cargo-zigbuild --locked --force
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Run PAM e2e suite
+        run: make e2e
+        env:
+          CARGO_TERM_COLOR: always

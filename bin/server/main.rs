@@ -27,15 +27,30 @@ struct Args {
     js_domain: Option<String>,
 
     /// The NATS server to connect to
-    #[arg(short = 's', default_value = "127.0.0.1", env = "SNAS_NATS_SERVER")]
+    #[arg(
+        short = 's',
+        long = "nats-server",
+        default_value = "127.0.0.1",
+        env = "SNAS_NATS_SERVER"
+    )]
     nats_server: String,
 
     /// The NATS port to connect to
-    #[arg(short = 'p', default_value_t = 4222, env = "SNAS_NATS_PORT")]
+    #[arg(
+        short = 'p',
+        long = "nats-port",
+        default_value_t = 4222,
+        env = "SNAS_NATS_PORT"
+    )]
     nats_port: u16,
 
     /// The name of the KeyValue bucket to use for storage
-    #[arg(short = 'b', default_value = "snas", env = "SNAS_KV_BUCKET")]
+    #[arg(
+        short = 'b',
+        long = "kv-bucket",
+        default_value = "snas",
+        env = "SNAS_KV_BUCKET"
+    )]
     kv_bucket: String,
 
     /// The creds file to use for authenticating to NATS. This is the preferred option
@@ -120,8 +135,8 @@ struct Args {
     #[cfg(unix)]
     #[arg(
         long = "user-socket",
-        env = "SNAS_USER_SOCKEt",
-        default_value = DEFAULT_SOCKET_PATH,
+        env = "SNAS_USER_SOCKET",
+        default_value_t = false,
         required_unless_present_any = ["admin_nats", "user_nats"],
     )]
     user_socket: bool,

@@ -2,8 +2,8 @@ use std::ffi::{CStr, CString};
 use std::path::Path;
 use std::sync::OnceLock;
 
-use libc::c_int;
 use pam::constants::{PamFlag, PamResultCode, PAM_DELETE_CRED, PAM_PROMPT_ECHO_OFF};
+use pam::items::User as PamUserItem;
 use pam::conv::Conv;
 use pam::module::{PamHandle, PamHooks};
 use pam::pam_try;
@@ -15,6 +15,14 @@ use tracing::error;
 
 static RUNTIME: OnceLock<(Runtime, SocketClient)> = OnceLock::new();
 const USER_INFO: &str = "user_info";
+const PAM_PRELIM_CHECK: PamFlag = 0x4000;
+const PAM_UPDATE_AUTHTOK: PamFlag = 0x2000;
+
+#[cfg(target_os = "linux")]
+type GroupCount = libc::size_t;
+
+#[cfg(not(target_os = "linux"))]
+type GroupCount = libc::c_int;
 
 struct PamSocket;
 pam::pam_hooks!(PamSocket);
@@ -34,8 +42,8 @@ impl PamHooks for PamSocket {
             }
         };
 
-        // Get username
-        let user = match pamh.get_user(None) {
+        // Get username (prompt if necessary)
+        let user = match resolve_username(pamh) {
             Ok(u) => u,
             Err(err_code) => {
                 error!(?err_code, "Could not get user");
@@ -91,7 +99,15 @@ impl PamHooks for PamSocket {
     fn sm_setcred(pamh: &mut PamHandle, _args: Vec<&CStr>, flag: PamFlag) -> PamResultCode {
         tracing::debug!("beginning set credentials");
 
-        let user = match pamh.get_user(None) {
+        // Allow disabling group and credential management in constrained environments (e.g., CI)
+        if std::env::var("SNAS_PAM_DISABLE_GROUPS")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            return PamResultCode::PAM_SUCCESS;
+        }
+
+        let user = match resolve_username(pamh) {
             Ok(u) => u,
             Err(err_code) => return err_code,
         };
@@ -182,7 +198,7 @@ impl PamHooks for PamSocket {
                 group_ids.push(grp.gr_gid);
             }
 
-            let ngroups: c_int = match group_ids.len().try_into() {
+            let ngroups: GroupCount = match group_ids.len().try_into() {
                 Ok(ngroups) => ngroups,
                 Err(_) => {
                     error!("Too many groups");
@@ -198,7 +214,17 @@ impl PamHooks for PamSocket {
     }
 
     // Password change functionality
-    fn sm_chauthtok(pamh: &mut PamHandle, _args: Vec<&CStr>, _flags: PamFlag) -> PamResultCode {
+    fn sm_chauthtok(pamh: &mut PamHandle, _args: Vec<&CStr>, flag: PamFlag) -> PamResultCode {
+        tracing::debug!(flag, "entered chauthtok");
+        if flag & PAM_PRELIM_CHECK != 0 {
+            tracing::debug!("prelim check acknowledged");
+            return PamResultCode::PAM_SUCCESS;
+        }
+
+        if flag & PAM_UPDATE_AUTHTOK == 0 {
+            tracing::warn!(flag, "unexpected chauthtok flag");
+            return PamResultCode::PAM_IGNORE;
+        }
         let (runtime, client) = RUNTIME.get_or_init(initialize_runtime);
 
         let conv = match pamh.get_item::<Conv>() {
@@ -207,7 +233,7 @@ impl PamHooks for PamSocket {
             Err(err_code) => return err_code,
         };
 
-        let user = match pamh.get_user(None) {
+        let user = match resolve_username(pamh) {
             Ok(u) => u,
             Err(err_code) => return err_code,
         };
@@ -240,12 +266,16 @@ impl PamHooks for PamSocket {
         };
 
         if new_pass != verify_pass {
+            tracing::warn!("new password mismatch");
             return PamResultCode::PAM_AUTHTOK_ERR;
         }
 
         match runtime.block_on(client.change_password(&user, old_pass, new_pass)) {
             Ok(_) => PamResultCode::PAM_SUCCESS,
-            Err(_) => PamResultCode::PAM_AUTHTOK_ERR,
+            Err(err) => {
+                error!(%err, "Failed to change password");
+                PamResultCode::PAM_AUTHTOK_ERR
+            }
         }
     }
 }
@@ -268,4 +298,21 @@ fn initialize_runtime() -> (Runtime, SocketClient) {
         ))
         .expect("Unable to create socket client");
     (runtime, client)
+}
+
+fn resolve_username(pamh: &PamHandle) -> Result<String, PamResultCode> {
+    const PROMPT: &str = "Username: ";
+    match pamh.get_user(Some(PROMPT)) {
+        Ok(user) if !user.is_empty() => Ok(user),
+        Ok(_) | Err(PamResultCode::PAM_SUCCESS) | Err(PamResultCode::PAM_USER_UNKNOWN) => {
+            match pamh.get_item::<PamUserItem>() {
+                Ok(Some(name)) => name
+                    .to_str()
+                    .map(|s| s.to_string())
+                    .map_err(|_| PamResultCode::PAM_USER_UNKNOWN),
+                _ => Err(PamResultCode::PAM_USER_UNKNOWN),
+            }
+        }
+        Err(err_code) => Err(err_code),
+    }
 }

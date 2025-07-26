@@ -18,26 +18,29 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs =
-    {
-      self,
-      nixpkgs,
-      crane,
-      fenix,
-      flake-utils,
-      advisory-db,
-      ...
-    }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
+  outputs = { self, nixpkgs, rust-overlay, crane, fenix, flake-utils
+    , advisory-db, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ (import rust-overlay) ];
+        };
 
         inherit (pkgs) lib;
 
-        craneLib = crane.mkLib pkgs;
+        craneLib = (crane.mkLib pkgs).overrideToolchain (p:
+          p.rust-bin.stable.latest.default.override {
+            targets = [ "aarch64-apple-darwin" "x86_64-unknown-linux-gnu" ];
+          });
         src = craneLib.cleanCargoSource ./.;
 
         # Common arguments can be set here to avoid repeating them later
@@ -46,26 +49,23 @@
           strictDeps = true;
           cargoExtraArgs = "";
 
-          buildInputs =
-            [
-              # Add additional build inputs here
-            ]
-            ++ lib.optionals pkgs.stdenv.isDarwin [
-              # Additional darwin specific inputs can be set here
-              pkgs.libiconv
-            ];
+          buildInputs = [
+            # Add additional build inputs here
+          ] ++ lib.optionals pkgs.stdenv.isDarwin [
+            # Additional darwin specific inputs can be set here
+            pkgs.libiconv
+          ];
 
           # Additional environment variables can be set directly
           # MY_CUSTOM_VAR = "some value";
         };
 
-        craneLibLLvmTools = craneLib.overrideToolchain (
-          fenix.packages.${system}.complete.withComponents [
+        craneLibLLvmTools = craneLib.overrideToolchain
+          (fenix.packages.${system}.complete.withComponents [
             "cargo"
             "llvm-tools"
             "rustc"
-          ]
-        );
+          ]);
 
         # Build *just* the cargo dependencies (of the entire workspace),
         # so we can reuse all of that work (e.g. via cachix) when running in CI
@@ -80,8 +80,7 @@
           doCheck = false;
         };
 
-        fileSetForCrate =
-          crate:
+        fileSetForCrate = crate:
           lib.fileset.toSource {
             root = crate;
             fileset = lib.fileset.unions [
@@ -94,34 +93,24 @@
             ];
           };
 
-        snas-lib = craneLib.buildPackage (
-          individualCrateArgs
-          // {
-            pname = "snas-lib";
-            src = fileSetForCrate ./.;
-            # This is a separate crate, so we can run unit tests here
-            doCheck = true;
-          }
-        );
-        snas = craneLib.buildPackage (
-          individualCrateArgs
-          // {
-            pname = "snas";
-            cargoExtraArgs = "--bin snas";
-            src = fileSetForCrate ./.;
-          }
-        );
-        snas-server = craneLib.buildPackage (
-          individualCrateArgs
-          // {
-            pname = "snas-server";
-            cargoExtraArgs = "--bin snas-server";
-            src = fileSetForCrate ./.;
-            doInstallCargoArtifacts = true;
-          }
-        );
-      in
-      {
+        snas-lib = craneLib.buildPackage (individualCrateArgs // {
+          pname = "snas-lib";
+          src = fileSetForCrate ./.;
+          # This is a separate crate, so we can run unit tests here
+          doCheck = true;
+        });
+        snas = craneLib.buildPackage (individualCrateArgs // {
+          pname = "snas";
+          cargoExtraArgs = "--bin snas";
+          src = fileSetForCrate ./.;
+        });
+        snas-server = craneLib.buildPackage (individualCrateArgs // {
+          pname = "snas-server";
+          cargoExtraArgs = "--bin snas-server";
+          src = fileSetForCrate ./.;
+          doInstallCargoArtifacts = true;
+        });
+      in {
         checks = {
           # Build the crates as part of `nix flake check` for convenience
           inherit snas snas-server;
@@ -132,92 +121,68 @@
           # Note that this is done as a separate derivation so that
           # we can block the CI if there are issues here, but not
           # prevent downstream consumers from building our crate by itself.
-          workspace-clippy = craneLib.cargoClippy (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-              cargoClippyExtraArgs = "--all-targets -- --deny warnings";
-            }
-          );
+          workspace-clippy = craneLib.cargoClippy (commonArgs // {
+            inherit cargoArtifacts;
+            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+          });
 
-          workspace-doc = craneLib.cargoDocTest (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-              cargoTestExtraArgs = "-p snas-lib";
-            }
-          );
+          workspace-doc = craneLib.cargoDocTest (commonArgs // {
+            inherit cargoArtifacts;
+            cargoTestExtraArgs = "-p snas-lib";
+          });
 
           # Check formatting
-          workspace-fmt = craneLib.cargoFmt {
-            inherit src;
-          };
+          workspace-fmt = craneLib.cargoFmt { inherit src; };
 
           # Audit dependencies
-          workspace-audit = craneLib.cargoAudit {
-            inherit src advisory-db;
-          };
+          workspace-audit = craneLib.cargoAudit { inherit src advisory-db; };
 
           # Audit licenses
           # my-workspace-deny = craneLib.cargoDeny {
           #   inherit src;
           # };
 
-          runE2ETests = craneLib.cargoTest (
-            commonArgs
-            // {
-              inherit cargoArtifacts;
-              nativeBuildInputs = with pkgs; [ nats-server ];
-              preCheck = ''
-                nats-server -js & 
-                NATS_SERVER_PID=$!
-                trap "kill $NATS_SERVER_PID" EXIT
-              '';
-            }
-          );
+          runE2ETests = craneLib.cargoTest (commonArgs // {
+            inherit cargoArtifacts;
+            nativeBuildInputs = with pkgs; [ nats-server ];
+            preCheck = ''
+              nats-server -js & 
+              NATS_SERVER_PID=$!
+              trap "kill $NATS_SERVER_PID" EXIT
+            '';
+          });
         };
 
-        packages =
-          {
-            inherit
-              snas
-              snas-server
-              # TODO: Figure out how to expose the rlib as an additional artifact for the binaries and to expose here
-              snas-lib
-              ;
-            default = snas;
-          }
-          // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-            workspace-llvm-coverage = craneLibLLvmTools.cargoLlvmCov (
-              commonArgs
-              // {
-                inherit cargoArtifacts;
-              }
-            );
-          };
+        packages = {
+          inherit snas snas-server
+            # TODO: Figure out how to expose the rlib as an additional artifact for the binaries and to expose here
+            snas-lib;
+          default = snas;
+        } // lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+          workspace-llvm-coverage = craneLibLLvmTools.cargoLlvmCov
+            (commonArgs // { inherit cargoArtifacts; });
+        };
 
         apps = {
-          snas-server = flake-utils.lib.mkApp {
-            drv = snas-server;
-          };
-          snas = flake-utils.lib.mkApp {
-            drv = snas;
-          };
+          snas-server = flake-utils.lib.mkApp { drv = snas-server; };
+          snas = flake-utils.lib.mkApp { drv = snas; };
         };
 
         devShells.default = craneLib.devShell {
           # Inherit inputs from checks.
           checks = self.checks.${system};
 
-          RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
+          RUST_SRC_PATH =
+            "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
 
           # Extra inputs can be added here; cargo and rustc are provided by default.
           packages = [
             pkgs.nats-server
             pkgs.natscli
             pkgs.git
+            pkgs.zig
+            pkgs.cargo-zigbuild
           ];
         };
-      }
-    );
+      });
 }

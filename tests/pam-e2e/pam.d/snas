@@ -1,0 +1,10 @@
+# Simple test PAM service for SNAS via socket
+# auth: authenticate user via our module
+auth       required   pam_snas_socket.so
+# account: authorize account (uses user_info set during auth)
+account    required   pam_snas_socket.so
+# password: change password when requested
+password   required   pam_snas_socket.so
+# session: set credentials/groups (no-op for now beyond groups/home)
+session    required   pam_snas_socket.so
+

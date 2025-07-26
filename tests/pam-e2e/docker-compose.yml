@@ -1,0 +1,29 @@
+services:
+  nats:
+    image: nats:2
+    platform: linux/amd64
+    command: ["-js","-m","8222","--server_name","snas-e2e-nats"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  pamtest:
+    platform: linux/amd64
+    build:
+      context: ../..
+      dockerfile: tests/pam-e2e/Dockerfile
+      args:
+        BIN_TARGET_DIR: target/zigbuild/x86_64-unknown-linux-gnu/release
+        PAM_TARGET_DIR: target/release
+    environment:
+      - SNAS_PAM_SOCKET_PATH=/run/snas.sock
+      - SNAS_NATS_SERVER=nats
+      - SNAS_NATS_PORT=4222
+      - SNAS_PAM_DISABLE_GROUPS=1
+    depends_on:
+      - nats
+    tmpfs:
+      - /run
+    # Keep logs visible
+    tty: true
+    stdin_open: true

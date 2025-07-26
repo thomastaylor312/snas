@@ -1,0 +1,5 @@
+#%PAM-1.0
+auth       required   pam_probe.so
+account    required   pam_probe.so
+session    required   pam_probe.so
+password   required   pam_probe.so
